@@ -21,6 +21,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import static com.github.bduisenov.fn.State.gets;
 import static com.github.bduisenov.fn.State.liftM;
@@ -147,6 +148,22 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
             return this;
         }
 
+        public RouterBuilder<T, P> flatMap(RetryableOperation<T, Either<P, T>, P> retryableOperation) {
+            int numberOfRetries = retryableOperation.getNumberOfRetries();
+            if (numberOfRetries > 100) {
+                throw new IllegalArgumentException("Too many retries specified");
+            }
+
+            Function<T, Either<P, T>> fun = retryableOperation.getFunction();
+            String name = fun.getClass().getSimpleName();
+
+            Predicate<P> predicate = retryableOperation.getShouldApply();
+
+            route = route.flatMap(tracked(pure(retryable(either -> either.flatMap(fun), name, numberOfRetries, predicate))));
+
+            return this;
+        }
+
         public RouterBuilder<T, P> recover(Function2<T, P, Either<P, T>> recoverFun) {
             this.route = this.route.flatMap(either -> state(context -> {
                 T state = context.getState();
@@ -239,6 +256,26 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
                     val rhr = createRouteHistoryRecord(either.getOrElse(state), executionResult, name);
 
                     return new ExecutionContext<>(List(rhr), executionResult._1);
+                }
+            };
+        }
+
+        private static <T, P> RouteFunction<T, P> retryable(Function1<Either<P, T>, Either<P, T>> function, String name, int numberOfTries, Predicate<P> shouldApply) {
+            return new RouteFunction<T, P>() {
+                @Override
+                public ExecutionContext<T, P> internalApply(T state, Either<P, T> either) {
+                    return internalApply(either, numberOfTries, List());
+                }
+
+                private ExecutionContext<T, P> internalApply(Either<P, T> either, int numberOfTries, List<RouteHistoryRecord<T, P>> acc) {
+                    val executionResult = execute(function, either);
+                    val rhr = createRouteHistoryRecord(either.get(), executionResult, name);
+
+                    Either<P, T> result = executionResult._1;
+
+                    return numberOfTries > 1 && result.isLeft() && shouldApply.test(result.getLeft())
+                            ? internalApply(either, numberOfTries - 1, acc.append(rhr))
+                            : new ExecutionContext<>(acc.append(rhr), result);
                 }
             };
         }
@@ -427,14 +464,20 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
 
     @Getter
     @RequiredArgsConstructor(access = PRIVATE)
-    public static final class RetryableOperation<T, R> {
+    public static final class RetryableOperation<T, R, P> {
 
         private final Function<T, R> function;
 
         private final int numberOfRetries;
 
-        public static <T, R> RetryableOperation<T, R> retryable(Function<T, R> function, int numberOfRetries) {
-            return new RetryableOperation<>(function, numberOfRetries);
+        private final Predicate<P> shouldApply;
+
+        public static <T, R, P> RetryableOperation<T, R, P> retryable(Function<T, R> function, int numberOfRetries) {
+            return retryable(function, numberOfRetries, val -> true);
+        }
+
+        public static <T, R, P> RetryableOperation<T, R, P> retryable(Function<T, R> function, int numberOfRetries, Predicate<P> shouldApply) {
+            return new RetryableOperation<>(function, numberOfRetries, shouldApply);
         }
     }
 }
