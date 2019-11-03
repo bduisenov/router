@@ -5,7 +5,7 @@
 
     <groupId>com.github.bduisenov</groupId>
     <artifactId>router</artifactId>
-    <version>1.0.1</version>
+    <version>1.0.2-SNAPSHOT</version>
 
     <name>${project.groupId}:${project.artifactId}</name>
     <description>Functional Router</description>
@@ -41,7 +41,7 @@
         <connection>scm:git:https://github.com/bduisenov/router.git</connection>
         <developerConnection>scm:git:git@github.com:bduisenov/router.git</developerConnection>
         <url>https://github.com/bduisenov/router</url>
-        <tag>router-1.0.1</tag>
+        <tag>HEAD</tag>
     </scm>
 
     <issueManagement>
