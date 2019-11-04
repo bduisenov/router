@@ -91,19 +91,19 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
         };
     }
 
-    public static <T, P> Router<T, P> router(Consumer<RouterBuilder<T, P>> route) {
+    public static <T, P> Function<T, Either<P, T>> router(Consumer<RouterBuilder<T, P>> route) {
         return router(Runnable::run, route);
     }
 
-    public static <T, P> Router<T, P> router(Consumer<RouterBuilder<T, P>> route, Consumer<RouteContext<T, P>> routeContextConsumer) {
+    public static <T, P> Function<T, Either<P, T>> router(Consumer<RouterBuilder<T, P>> route, Consumer<RouteContext<T, P>> routeContextConsumer) {
         return router(Runnable::run, route, routeContextConsumer);
     }
 
-    public static <T, P> Router<T, P> router(Executor asyncExecutor, Consumer<RouterBuilder<T, P>> route) {
+    public static <T, P> Function<T, Either<P, T>> router(Executor asyncExecutor, Consumer<RouterBuilder<T, P>> route) {
         return router(asyncExecutor, route, noopRouteContextConsumer());
     }
 
-    public static <T, P> Router<T, P> router(Executor asyncExecutor, Consumer<RouterBuilder<T, P>> route, Consumer<RouteContext<T, P>> routeContextConsumer) {
+    public static <T, P> Function<T, Either<P, T>> router(Executor asyncExecutor, Consumer<RouterBuilder<T, P>> route, Consumer<RouteContext<T, P>> routeContextConsumer) {
         RouterBuilder<T, P> builder = builder(asyncExecutor, routeContextConsumer);
 
         route.accept(builder);
@@ -143,7 +143,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
         public RouterBuilder<T, P> flatMap(Function<T, Either<P, T>> fun) {
             String name = fun.getClass().getSimpleName();
 
-            route = route.flatMap(tracked(pure(simple(either -> either.flatMap(fun), name))));
+            route = route.flatMap(thunk(pure(simple(either -> either.flatMap(fun), name))));
 
             return this;
         }
@@ -159,7 +159,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
 
             Predicate<P> predicate = retryableOperation.getShouldApply();
 
-            route = route.flatMap(tracked(pure(retryable(either -> either.flatMap(fun), name, numberOfRetries, predicate))));
+            route = route.flatMap(thunk(pure(retryable(either -> either.flatMap(fun), name, numberOfRetries, predicate))));
 
             return this;
         }
@@ -182,7 +182,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
             Function1<State<InternalRouteContext<T, P>, T>, State<InternalRouteContext<T, P>, Function1<Either<P, T>, Either<P, T>>>> lifted =
                     liftM(fun.curried());
 
-            route = route.flatMap(tracked(lifted.apply(getState).map(f -> alwaysReportable(f, name))));
+            route = route.flatMap(thunk(lifted.apply(getState).map(f -> alwaysReportable(f, name))));
 
             return new FinallyRouteBuilder<>(this);
         }
@@ -363,8 +363,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
     }
     // @formatter:on
 
-    // TODO rename method
-    public static <T, P> Function1<Either<P, T>, State<InternalRouteContext<T, P>, Either<P, T>>> tracked(
+    public static <T, P> Function1<Either<P, T>, State<InternalRouteContext<T, P>, Either<P, T>>> thunk(
             State<InternalRouteContext<T, P>, RouteFunction<T, P>> stateM) {
         return either -> stateM.flatMap(fun -> state(context -> {
             ExecutionContext<T, P> execContext = fun.apply(context.state, either);
