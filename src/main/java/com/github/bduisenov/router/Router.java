@@ -29,6 +29,7 @@ import static com.github.bduisenov.fn.State.pure;
 import static com.github.bduisenov.fn.State.state;
 import static io.vavr.API.$;
 import static io.vavr.API.Case;
+import static io.vavr.API.Left;
 import static io.vavr.API.List;
 import static io.vavr.API.Match;
 import static io.vavr.API.Right;
@@ -39,6 +40,7 @@ import static java.util.concurrent.CompletableFuture.allOf;
 import static java.util.concurrent.CompletableFuture.runAsync;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.function.Function.identity;
+import static java.util.stream.Collectors.toList;
 import static lombok.AccessLevel.PRIVATE;
 
 @RequiredArgsConstructor
@@ -57,14 +59,14 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
         InternalRouteContext<T, P> internalRouteContext = executionResult._1;
         Either<P, T> result = executionResult._2;
 
-        deepWait(internalRouteContext.asyncRouterContexts)
+        deepWait(internalRouteContext.nestedRouterContexts)
                 .whenComplete(($1, $2) -> routeContextConsumer.accept(toJavaView(internalRouteContext)));
 
         return result;
     }
 
     private CompletableFuture<Void> deepWait(List<CompletableFuture<Tuple2<InternalRouteContext<T, P>, Either<P, T>>>> promises) {
-        List<CompletableFuture<Void>> deeplyChained = promises.map(promise -> promise.thenCompose(tuple -> deepWait(tuple._1.asyncRouterContexts)));
+        List<CompletableFuture<Void>> deeplyChained = promises.map(promise -> promise.thenCompose(tuple -> deepWait(tuple._1.nestedRouterContexts)));
 
         return allOf(deeplyChained.toJavaList().toArray(new CompletableFuture[0]));
     }
@@ -82,8 +84,8 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
             }
 
             @Override
-            public java.util.List<Tuple2<RouteContext<T, P>, Either<P, T>>> getAsyncRouterContexts() {
-                return internalRouteContext.asyncRouterContexts.map(promise -> Try(() -> promise.get(0, NANOSECONDS)))
+            public java.util.List<Tuple2<RouteContext<T, P>, Either<P, T>>> getNestedRouterContexts() {
+                return internalRouteContext.nestedRouterContexts.map(promise -> Try(() -> promise.get(0, NANOSECONDS)))
                         .flatMap(identity())
                         .map(tuple -> tuple.map1(Router.this::toJavaView))
                         .toJavaList();
@@ -204,6 +206,37 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
             return this;
         }
 
+        public RouterBuilder<T, P> split(Function<T, java.util.List<T>> splitter, Function<java.util.List<Either<P, T>>, Either<P, T>> aggregator, Consumer<SplitRouteBuilder<T, P>> splitRoute) {
+            SplitRouteBuilder<T, P> splitBuilder = new SplitRouteBuilder<>(asyncExecutor, this, splitter, aggregator);
+
+            splitRoute.accept(splitBuilder);
+
+            return splitBuilder.addSplitRoute();
+        }
+
+        protected RouterBuilder<T, P> addSplitRoute(SplitRouteBuilder<T, P> splitRouteBuilder) {
+            State<InternalRouteContext<T, P>, Either<P, T>> splitRoute = splitRouteBuilder.route;
+            Function<T, java.util.List<T>> splitter = splitRouteBuilder.splitter;
+            Function<java.util.List<Either<P, T>>, Either<P, T>> aggregator = splitRouteBuilder.aggregator;
+
+            route = route.flatMap(either -> state(context -> {
+                Either<P, List<T>> splitted = either.map(splitter).map(List::ofAll);
+
+                return splitted.getOrElse(List.empty()).isEmpty()
+                        ? Tuple(context, either)
+                        : splitted.map(xs -> xs.map(InternalRouteContext<T, P>::new).map(splitRoute::run))
+                        .fold(p -> Tuple(context, Left(p)), xs -> {
+                            val nestedRouterContexts = xs.map(CompletableFuture::completedFuture).collect(toList());
+                            val updatedNestedRouterContexts = context.nestedRouterContexts.appendAll(nestedRouterContexts);
+                            val updatedContext = new InternalRouteContext<>(context.state, context.historyRecords, updatedNestedRouterContexts);
+
+                            return Tuple(updatedContext, aggregator.apply(xs.unzip(identity())._2.asJava()));
+                        });
+            }));
+
+            return this;
+        }
+
         public RouterBuilder<T, P> async(Consumer<AsyncRouteBuilder<T, P>> asyncRoute) {
             return async(asyncExecutor, asyncRoute);
         }
@@ -228,7 +261,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
                         .onSuccess(promise::complete)
                         .onFailure(promise::completeExceptionally), asyncExecutor));
 
-                InternalRouteContext<T, P> updatedContext = new InternalRouteContext<>(context.state, context.historyRecords, context.asyncRouterContexts.append(promise));
+                InternalRouteContext<T, P> updatedContext = new InternalRouteContext<>(context.state, context.historyRecords, context.nestedRouterContexts.append(promise));
 
                 return Tuple(updatedContext, either);
             }));
@@ -327,6 +360,28 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
         }
     }
 
+    public static class SplitRouteBuilder<T, P> extends RouterBuilder<T, P> {
+
+        private final RouterBuilder<T, P> parentRouter;
+
+        private final Function<T, java.util.List<T>> splitter;
+
+        private final Function<java.util.List<Either<P, T>>, Either<P, T>> aggregator;
+
+        public SplitRouteBuilder(Executor asyncExecutor, RouterBuilder<T, P> parentRouter,
+                                 Function<T, java.util.List<T>> splitter,
+                                 Function<java.util.List<Either<P, T>>, Either<P, T>> aggregator) {
+            super(asyncExecutor, noopRouteContextConsumer());
+            this.parentRouter = parentRouter;
+            this.splitter = splitter;
+            this.aggregator = aggregator;
+        }
+
+        private RouterBuilder<T, P> addSplitRoute() {
+            return parentRouter.addSplitRoute(this);
+        }
+    }
+
     // MARK: async route builder
 
     public static class AsyncRouteBuilder<T, P> extends RouterBuilder<T, P> {
@@ -373,7 +428,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
 
             List<RouteHistoryRecord<T, P>> updatedHistoryRecords = context.getHistoryRecords().appendAll(historyRecords);
             InternalRouteContext<T, P> updatedContext = new InternalRouteContext<>(result.getOrElse(context.state), updatedHistoryRecords,
-                    context.asyncRouterContexts);
+                    context.nestedRouterContexts);
 
             return Tuple(updatedContext, result);
         }));
@@ -394,7 +449,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
          * Centralized map containing the async child route number and it's result context of execution.
          */
         @NonNull
-        private final List<CompletableFuture<Tuple2<InternalRouteContext<T, P>, Either<P, T>>>> asyncRouterContexts;
+        private final List<CompletableFuture<Tuple2<InternalRouteContext<T, P>, Either<P, T>>>> nestedRouterContexts;
 
         private InternalRouteContext(T state, List<RouteHistoryRecord<T, P>> historyRecords) {
             this(state, historyRecords, List());
@@ -411,7 +466,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
 
         java.util.List<RouteHistoryRecord<T, P>> getHistoryRecords();
 
-        java.util.List<Tuple2<RouteContext<T, P>, Either<P, T>>> getAsyncRouterContexts();
+        java.util.List<Tuple2<RouteContext<T, P>, Either<P, T>>> getNestedRouterContexts();
     }
 
     @Value
