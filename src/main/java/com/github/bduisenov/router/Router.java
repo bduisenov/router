@@ -151,8 +151,8 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
         }
 
         public RouterBuilder<T, P> flatMap(RetryableOperation<T, Either<P, T>, P> retryableOperation) {
-            int numberOfRetries = retryableOperation.getNumberOfRetries();
-            if (numberOfRetries > 100) {
+            int numberOfTries = retryableOperation.getNumberOfTries();
+            if (numberOfTries > 100) {
                 throw new IllegalArgumentException("Too many retries specified");
             }
 
@@ -161,7 +161,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
 
             Predicate<P> predicate = retryableOperation.getShouldApply();
 
-            route = route.flatMap(thunk(pure(retryable(either -> either.flatMap(fun), name, numberOfRetries, predicate))));
+            route = route.flatMap(thunk(pure(retryable(either -> either.flatMap(fun), name, numberOfTries, predicate))));
 
             return this;
         }
@@ -522,16 +522,16 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
 
         private final Function<T, R> function;
 
-        private final int numberOfRetries;
+        private final int numberOfTries;
 
         private final Predicate<P> shouldApply;
 
-        public static <T, R, P> RetryableOperation<T, R, P> retryable(Function<T, R> function, int numberOfRetries) {
-            return retryable(function, numberOfRetries, val -> true);
+        public static <T, R, P> RetryableOperation<T, R, P> retryable(Function<T, R> function, int numberOfTries) {
+            return retryable(function, numberOfTries, val -> true);
         }
 
-        public static <T, R, P> RetryableOperation<T, R, P> retryable(Function<T, R> function, int numberOfRetries, Predicate<P> shouldApply) {
-            return new RetryableOperation<>(function, numberOfRetries, shouldApply);
+        public static <T, R, P> RetryableOperation<T, R, P> retryable(Function<T, R> function, int numberOfTries, Predicate<P> shouldApply) {
+            return new RetryableOperation<>(function, numberOfTries, shouldApply);
         }
     }
 }
