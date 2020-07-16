@@ -29,13 +29,13 @@ import static com.github.bduisenov.fn.State.pure;
 import static com.github.bduisenov.fn.State.state;
 import static io.vavr.API.$;
 import static io.vavr.API.Case;
-import static io.vavr.API.Left;
 import static io.vavr.API.List;
 import static io.vavr.API.Match;
 import static io.vavr.API.Right;
 import static io.vavr.API.TODO;
 import static io.vavr.API.Try;
 import static io.vavr.API.Tuple;
+import static io.vavr.Predicates.not;
 import static java.util.concurrent.CompletableFuture.allOf;
 import static java.util.concurrent.CompletableFuture.runAsync;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -206,7 +206,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
             return this;
         }
 
-        public RouterBuilder<T, P> split(Function<T, java.util.List<T>> splitter, Function<java.util.List<Either<P, T>>, Either<P, T>> aggregator, Consumer<SplitRouteBuilder<T, P>> splitRoute) {
+        public RouterBuilder<T, P> split(Function<T, java.util.List<T>> splitter, Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator, Consumer<SplitRouteBuilder<T, P>> splitRoute) {
             SplitRouteBuilder<T, P> splitBuilder = new SplitRouteBuilder<>(asyncExecutor, this, splitter, aggregator);
 
             splitRoute.accept(splitBuilder);
@@ -217,22 +217,18 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
         protected RouterBuilder<T, P> addSplitRoute(SplitRouteBuilder<T, P> splitRouteBuilder) {
             State<InternalRouteContext<T, P>, Either<P, T>> splitRoute = splitRouteBuilder.route;
             Function<T, java.util.List<T>> splitter = splitRouteBuilder.splitter;
-            Function<java.util.List<Either<P, T>>, Either<P, T>> aggregator = splitRouteBuilder.aggregator;
+            Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator = splitRouteBuilder.aggregator;
 
-            route = route.flatMap(either -> state(context -> {
-                Either<P, List<T>> splitted = either.map(splitter).map(List::ofAll);
+            route = route.flatMap(either -> state(context -> either.map(x -> Tuple(x, List.ofAll(splitter.apply(x))))
+                    .filter(not(tuple -> tuple._2.isEmpty()))
+                    .fold(() -> Tuple(context, either), el -> el.fold($_ -> Tuple(context, either), tuple -> {
+                        val results = tuple._2.map(InternalRouteContext<T, P>::new).map(splitRoute::run);
+                        val nestedRouterContexts = results.map(CompletableFuture::completedFuture).collect(toList());
+                        val updatedNestedRouterContexts = context.nestedRouterContexts.appendAll(nestedRouterContexts);
+                        val updatedContext = new InternalRouteContext<>(context.state, context.historyRecords, updatedNestedRouterContexts);
 
-                return splitted.getOrElse(List.empty()).isEmpty()
-                        ? Tuple(context, either)
-                        : splitted.map(xs -> xs.map(InternalRouteContext<T, P>::new).map(splitRoute::run))
-                        .fold(p -> Tuple(context, Left(p)), xs -> {
-                            val nestedRouterContexts = xs.map(CompletableFuture::completedFuture).collect(toList());
-                            val updatedNestedRouterContexts = context.nestedRouterContexts.appendAll(nestedRouterContexts);
-                            val updatedContext = new InternalRouteContext<>(context.state, context.historyRecords, updatedNestedRouterContexts);
-
-                            return Tuple(updatedContext, aggregator.apply(xs.unzip(identity())._2.asJava()));
-                        });
-            }));
+                        return Tuple(updatedContext, aggregator.apply(tuple._1, results.unzip(identity())._2.asJava()));
+                    }))));
 
             return this;
         }
@@ -366,11 +362,11 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
 
         private final Function<T, java.util.List<T>> splitter;
 
-        private final Function<java.util.List<Either<P, T>>, Either<P, T>> aggregator;
+        private final Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator;
 
         public SplitRouteBuilder(Executor asyncExecutor, RouterBuilder<T, P> parentRouter,
                                  Function<T, java.util.List<T>> splitter,
-                                 Function<java.util.List<Either<P, T>>, Either<P, T>> aggregator) {
+                                 Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator) {
             super(asyncExecutor, noopRouteContextConsumer());
             this.parentRouter = parentRouter;
             this.splitter = splitter;
