@@ -33,7 +33,7 @@
         <maven.compiler.source>1.8</maven.compiler.source>
         <maven.compiler.target>1.8</maven.compiler.target>
         <vavr.version>0.10.3</vavr.version>
-        <fn.version>1.0.2</fn.version>
+        <fn.version>1.0.5</fn.version>
         <lombok.version>1.18.8</lombok.version>
         <junit.jupiter.version>5.6.2</junit.jupiter.version>
         <assertj.version>3.16.1</assertj.version>

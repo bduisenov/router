@@ -125,7 +125,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
         /**
          * Initial route prepares {@link State} with {@link InternalRouteContext} and passed {@code state}.
          */
-        State<InternalRouteContext<T, P>, Either<P, T>> route = gets(context -> Right(context.state));
+        State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route = state(context -> Tuple(context, Right(context.state)));
 
         /**
          * Default async executor is used by async routes in case if no explicit executor is given to the async route.
@@ -140,7 +140,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
         @NonNull
         private final Consumer<RouteContext<T, P>> routeContextConsumer;
 
-        private final State<InternalRouteContext<T, P>, T> getState = gets(InternalRouteContext::getState);
+        private final State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, T> getState = gets(InternalRouteContext::getState);
 
         public RouterBuilder<T, P> flatMap(Function<T, Either<P, T>> fun) {
             String name = fun.getClass().getSimpleName();
@@ -181,7 +181,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
         public FinallyRouteBuilder<T, P> doFinally(Function2<T, Either<P, T>, Either<P, T>> fun) {
             String name = fun.getClass().getSimpleName();
 
-            Function1<State<InternalRouteContext<T, P>, T>, State<InternalRouteContext<T, P>, Function1<Either<P, T>, Either<P, T>>>> lifted =
+            Function1<State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Function1<Either<P, T>, Either<P, T>>>> lifted =
                     liftM(fun.curried());
 
             route = route.flatMap(thunk(lifted.apply(getState).map(f -> alwaysReportable(f, name))));
@@ -199,7 +199,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
 
         RouterBuilder<T, P> addMatchRoute(MatchRouteBuilder<T, P> matchRouteBuilder) {
             @SuppressWarnings("unchecked")
-            Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, Either<P, T>>>[] cases = matchRouteBuilder.cases.toJavaList().toArray(new Case[0]);
+            Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>[] cases = matchRouteBuilder.cases.toJavaList().toArray(new Case[0]);
 
             route = route.flatMap(either -> Match(either).of(cases));
 
@@ -215,7 +215,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
         }
 
         protected RouterBuilder<T, P> addSplitRoute(SplitRouteBuilder<T, P> splitRouteBuilder) {
-            State<InternalRouteContext<T, P>, Either<P, T>> splitRoute = splitRouteBuilder.route;
+            State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> splitRoute = splitRouteBuilder.route;
             Function<T, java.util.List<T>> splitter = splitRouteBuilder.splitter;
             Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator = splitRouteBuilder.aggregator;
 
@@ -246,7 +246,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
         }
 
         private RouterBuilder<T, P> addAsyncRoute(AsyncRouteBuilder<T, P> asyncRouteBuilder) {
-            State<InternalRouteContext<T, P>, Either<P, T>> asyncRoute = asyncRouteBuilder.route;
+            State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> asyncRoute = asyncRouteBuilder.route;
             Executor asyncExecutor = asyncRouteBuilder.asyncExecutor;
 
             route = route.flatMap(either -> state(context -> {
@@ -320,7 +320,7 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
 
         private final RouterBuilder<T, P> parentRouter;
 
-        private List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, Either<P, T>>>> cases = List();
+        private List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>> cases = List();
 
         private MatchRouteBuilder(RouterBuilder<T, P> parentRouter) {
             this.parentRouter = parentRouter;
@@ -414,8 +414,8 @@ public class Router<T, P> implements Function<T, Either<P, T>> {
     }
     // @formatter:on
 
-    public static <T, P> Function1<Either<P, T>, State<InternalRouteContext<T, P>, Either<P, T>>> thunk(
-            State<InternalRouteContext<T, P>, RouteFunction<T, P>> stateM) {
+    public static <T, P> Function1<Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>> thunk(
+            State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, RouteFunction<T, P>> stateM) {
         return either -> stateM.flatMap(fun -> state(context -> {
             ExecutionContext<T, P> execContext = fun.apply(context.state, either);
 
