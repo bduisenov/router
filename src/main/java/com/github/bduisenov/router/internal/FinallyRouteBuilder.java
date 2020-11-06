@@ -1,10 +1,18 @@
 package com.github.bduisenov.router.internal;
 
+import io.vavr.control.Either;
 import lombok.AccessLevel;
 import lombok.RequiredArgsConstructor;
 
-@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
-public final class FinallyRouteBuilder<T, P> implements RouterBuilder {
+import java.util.function.Function;
 
-    private final DefaultRouterBuilder<T, P> parentRouter;
+@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
+public final class FinallyRouteBuilder<T, P> implements RouterBuilder<T, P> {
+
+    private final RouterBuilder<T, P> parentRoute;
+
+    @Override
+    public Function<T, Either<P, T>> build() {
+        return parentRoute.build();
+    }
 }

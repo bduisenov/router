@@ -1,6 +1,7 @@
 package com.github.bduisenov.router;
 
-import com.github.bduisenov.router.internal.DefaultRouterBuilder;
+import com.github.bduisenov.router.internal.DefaultRouteBuilder;
+import com.github.bduisenov.router.internal.RouterBuilder;
 import io.vavr.control.Either;
 
 import java.util.concurrent.Executor;
@@ -15,27 +16,27 @@ public final class Router {
         // NOOP
     }
 
-    public static <T, P> Function<T, Either<P, T>> router(Consumer<DefaultRouterBuilder<T, P>> route) {
-        return router(Runnable::run, route);
+    public static <T, P> Function<T, Either<P, T>> router(Function<DefaultRouteBuilder<T, P>, RouterBuilder<T, P>> routeConsumer) {
+        return router(Runnable::run, routeConsumer);
     }
 
-    public static <T, P> Function<T, Either<P, T>> router(Consumer<DefaultRouterBuilder<T, P>> route, Consumer<RouteContext<T, P>> routeContextConsumer) {
-        return router(Runnable::run, route, routeContextConsumer);
+    public static <T, P> Function<T, Either<P, T>> router(Function<DefaultRouteBuilder<T, P>, RouterBuilder<T, P>> routeConsumer,
+                                                          Consumer<RouteContext<T, P>> routeContextConsumer) {
+        return router(Runnable::run, routeConsumer, routeContextConsumer);
     }
 
-    public static <T, P> Function<T, Either<P, T>> router(Executor asyncExecutor, Consumer<DefaultRouterBuilder<T, P>> route) {
-        return router(asyncExecutor, route, noopRouteContextConsumer());
+    public static <T, P> Function<T, Either<P, T>> router(Executor asyncExecutor, Function<DefaultRouteBuilder<T, P>, RouterBuilder<T, P>> routeConsumer) {
+        return router(asyncExecutor, routeConsumer, noopRouteContextConsumer());
     }
 
-    public static <T, P> Function<T, Either<P, T>> router(Executor asyncExecutor, Consumer<DefaultRouterBuilder<T, P>> route, Consumer<RouteContext<T, P>> routeContextConsumer) {
-        DefaultRouterBuilder<T, P> builder = builder(asyncExecutor, routeContextConsumer);
+    public static <T, P> Function<T, Either<P, T>> router(Executor asyncExecutor, Function<DefaultRouteBuilder<T, P>, RouterBuilder<T, P>> routeConsumer,
+                                                          Consumer<RouteContext<T, P>> routeContextConsumer) {
+        DefaultRouteBuilder<T, P> builder = builder(asyncExecutor, routeContextConsumer);
 
-        route.accept(builder);
-
-        return builder.build();
+        return routeConsumer.apply(builder).build();
     }
 
-    private static <T, P> DefaultRouterBuilder<T, P> builder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
-        return new DefaultRouterBuilder<>(asyncExecutor, routeContextConsumer);
+    private static <T, P> DefaultRouteBuilder<T, P> builder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
+        return new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer);
     }
 }

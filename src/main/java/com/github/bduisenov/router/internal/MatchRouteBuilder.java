@@ -1,55 +1,71 @@
 package com.github.bduisenov.router.internal;
 
 import com.github.bduisenov.fn.State;
+import io.vavr.API;
 import io.vavr.API.Match.Case;
 import io.vavr.API.Match.Pattern0;
 import io.vavr.API.Match.Pattern1;
 import io.vavr.collection.List;
 import io.vavr.control.Either;
-import lombok.AccessLevel;
-import lombok.RequiredArgsConstructor;
+import lombok.val;
 
 import java.util.concurrent.Executor;
-import java.util.function.Consumer;
+import java.util.function.Function;
 
 import static com.github.bduisenov.router.internal.RouterFunctions.noopRouteContextConsumer;
 import static io.vavr.API.$;
 import static io.vavr.API.Case;
 import static io.vavr.API.List;
+import static io.vavr.API.Match;
+import static io.vavr.API.TODO;
 
-@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
-public final class MatchRouteBuilder<T, P> implements RouterBuilder {
+public final class MatchRouteBuilder<T, P> implements RouterBuilder<T, P> {
 
-    private final DefaultRouterBuilder<T, P> parentRouter;
+    private final DefaultRouteBuilder<T, P> parentRouter;
 
-    List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>> cases = List();
+    private final List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>> cases;
 
-    public MatchRouteBuilder<T, P> when(Pattern0<? extends Either<P, T>> pattern, Consumer<DefaultRouterBuilder<T, P>> routerConsumer) {
-        Executor asyncExecutor = parentRouter.asyncExecutor;
-        DefaultRouterBuilder<T, P> matchRouteBuilder = new DefaultRouterBuilder<>(asyncExecutor, noopRouteContextConsumer());
-
-        routerConsumer.accept(matchRouteBuilder);
-
-        cases = cases.append(Case(pattern, matchRouteBuilder.route));
-
-        return this;
+    MatchRouteBuilder(DefaultRouteBuilder<T, P> parentRouter) {
+        this.parentRouter = parentRouter;
+        this.cases = List();
     }
 
-    public MatchRouteBuilder<T, P> when(Pattern1<? extends Either<P, T>, ?> pattern, Consumer<DefaultRouterBuilder<T, P>> routerConsumer) {
-        Executor asyncExecutor = parentRouter.asyncExecutor;
-        DefaultRouterBuilder<T, P> matchRouteBuilder = new DefaultRouterBuilder<>(asyncExecutor, noopRouteContextConsumer());
-
-        routerConsumer.accept(matchRouteBuilder);
-
-        cases = cases.append(Case(pattern, matchRouteBuilder.route));
-
-        return this;
+    public MatchRouteBuilder(DefaultRouteBuilder<T, P> parentRouter, List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>> cases) {
+        this.parentRouter = parentRouter;
+        this.cases = cases;
     }
 
-    DefaultRouterBuilder<T, P> addMatchRoute() {
+    public MatchRouteBuilder<T, P> when(Pattern0<? extends Either<P, T>> pattern, Function<DefaultRouteBuilder<T, P>, DefaultRouteBuilder<T, P>> routerConsumer) {
+        Executor asyncExecutor = parentRouter.asyncExecutor;
+        DefaultRouteBuilder<T, P> matchRouteBuilder = routerConsumer.apply(new DefaultRouteBuilder<>(asyncExecutor, noopRouteContextConsumer()));
+
+        val _cases = cases.append(Case(pattern, matchRouteBuilder.route));
+
+        return new MatchRouteBuilder<>(parentRouter, _cases);
+    }
+
+    public MatchRouteBuilder<T, P> when(Pattern1<? extends Either<P, T>, ?> pattern, Function< DefaultRouteBuilder<T, P>, DefaultRouteBuilder<T, P>> routerConsumer) {
+        Executor asyncExecutor = parentRouter.asyncExecutor;
+        DefaultRouteBuilder<T, P> matchRouteBuilder = routerConsumer.apply(new DefaultRouteBuilder<>(asyncExecutor, noopRouteContextConsumer()));
+
+        val _cases = cases.append(Case(pattern, matchRouteBuilder.route));
+
+        return new MatchRouteBuilder<>(parentRouter, _cases);
+    }
+
+    DefaultRouteBuilder<T, P> addMatchRoute() {
         // default noop matcher
-        cases = cases.append(Case($(), State::pure));
+        val _cases = cases.append(Case($(), State::pure));
+        @SuppressWarnings("unchecked")
+        API.Match.Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>[] casesArr = _cases.toJavaList().toArray(new API.Match.Case[0]);
 
-        return parentRouter.addMatchRoute(this);
+        val _route = parentRouter.route.flatMap(either -> Match(either).of(casesArr));
+
+        return new DefaultRouteBuilder<>(parentRouter.asyncExecutor, parentRouter.routeContextConsumer, _route);
+    }
+
+    @Override
+    public Function<T, Either<P, T>> build() {
+        return TODO();
     }
 }
