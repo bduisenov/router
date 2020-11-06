@@ -9,15 +9,12 @@ import io.vavr.collection.List;
 import io.vavr.control.Either;
 import lombok.val;
 
-import java.util.concurrent.Executor;
 import java.util.function.Function;
 
-import static com.github.bduisenov.router.internal.RouterFunctions.noopRouteContextConsumer;
 import static io.vavr.API.$;
 import static io.vavr.API.Case;
 import static io.vavr.API.List;
 import static io.vavr.API.Match;
-import static io.vavr.API.TODO;
 
 public final class MatchRouteBuilder<T, P> implements RouterBuilder<T, P> {
 
@@ -26,8 +23,7 @@ public final class MatchRouteBuilder<T, P> implements RouterBuilder<T, P> {
     private final List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>> cases;
 
     MatchRouteBuilder(DefaultRouteBuilder<T, P> parentRouter) {
-        this.parentRouter = parentRouter;
-        this.cases = List();
+        this(parentRouter, List());
     }
 
     public MatchRouteBuilder(DefaultRouteBuilder<T, P> parentRouter, List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>> cases) {
@@ -36,17 +32,15 @@ public final class MatchRouteBuilder<T, P> implements RouterBuilder<T, P> {
     }
 
     public MatchRouteBuilder<T, P> when(Pattern0<? extends Either<P, T>> pattern, Function<DefaultRouteBuilder<T, P>, DefaultRouteBuilder<T, P>> routerConsumer) {
-        Executor asyncExecutor = parentRouter.asyncExecutor;
-        DefaultRouteBuilder<T, P> matchRouteBuilder = routerConsumer.apply(new DefaultRouteBuilder<>(asyncExecutor, noopRouteContextConsumer()));
+        DefaultRouteBuilder<T, P> matchRouteBuilder = routerConsumer.apply(new DefaultRouteBuilder<>(parentRouter));
 
         val _cases = cases.append(Case(pattern, matchRouteBuilder.route));
 
         return new MatchRouteBuilder<>(parentRouter, _cases);
     }
 
-    public MatchRouteBuilder<T, P> when(Pattern1<? extends Either<P, T>, ?> pattern, Function< DefaultRouteBuilder<T, P>, DefaultRouteBuilder<T, P>> routerConsumer) {
-        Executor asyncExecutor = parentRouter.asyncExecutor;
-        DefaultRouteBuilder<T, P> matchRouteBuilder = routerConsumer.apply(new DefaultRouteBuilder<>(asyncExecutor, noopRouteContextConsumer()));
+    public MatchRouteBuilder<T, P> when(Pattern1<? extends Either<P, T>, ?> pattern, Function<DefaultRouteBuilder<T, P>, DefaultRouteBuilder<T, P>> routerConsumer) {
+        DefaultRouteBuilder<T, P> matchRouteBuilder = routerConsumer.apply(new DefaultRouteBuilder<>(parentRouter));
 
         val _cases = cases.append(Case(pattern, matchRouteBuilder.route));
 
@@ -61,11 +55,6 @@ public final class MatchRouteBuilder<T, P> implements RouterBuilder<T, P> {
 
         val _route = parentRouter.route.flatMap(either -> Match(either).of(casesArr));
 
-        return new DefaultRouteBuilder<>(parentRouter.asyncExecutor, parentRouter.routeContextConsumer, _route);
-    }
-
-    @Override
-    public Function<T, Either<P, T>> build() {
-        return TODO();
+        return new DefaultRouteBuilder<>(parentRouter, _route);
     }
 }

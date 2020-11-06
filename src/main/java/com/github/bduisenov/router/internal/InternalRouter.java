@@ -19,7 +19,7 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.function.Function.identity;
 
 @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
-final class InternalRouter<T, P> implements Function<T, Either<P, T>> {
+class InternalRouter<T, P> implements Function<T, Either<P, T>> {
 
     @NonNull
     private final Function<T, Tuple2<InternalRouteContext<T, P>, Either<P, T>>> route;

@@ -7,10 +7,12 @@ import com.github.bduisenov.router.RouteHistoryRecord;
 import io.vavr.API;
 import io.vavr.Function1;
 import io.vavr.Function2;
+import io.vavr.Tuple2;
 import io.vavr.collection.List;
 import io.vavr.control.Either;
 import lombok.val;
 
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -23,7 +25,12 @@ import static com.github.bduisenov.fn.State.state;
 import static com.github.bduisenov.router.internal.RouterFunctions.thunk;
 import static io.vavr.API.List;
 import static io.vavr.API.Right;
+import static io.vavr.API.Try;
 import static io.vavr.API.Tuple;
+import static io.vavr.Predicates.not;
+import static java.util.concurrent.CompletableFuture.runAsync;
+import static java.util.function.Function.identity;
+import static java.util.stream.Collectors.toList;
 
 public class DefaultRouteBuilder<T, P> implements RouterBuilder<T, P> {
 
@@ -45,10 +52,17 @@ public class DefaultRouteBuilder<T, P> implements RouterBuilder<T, P> {
 
     private final State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, T> getState = gets(InternalRouteContext::getState);
 
+    public DefaultRouteBuilder(DefaultRouteBuilder<T, P> parentRouteBuilder) {
+        this(parentRouteBuilder.asyncExecutor, parentRouteBuilder.routeContextConsumer);
+    }
+
+    public DefaultRouteBuilder(DefaultRouteBuilder<T, P> parentRouteBuilder,
+                               State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route) {
+        this(parentRouteBuilder.asyncExecutor, parentRouteBuilder.routeContextConsumer, route);
+    }
+
     public DefaultRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
-        this.asyncExecutor = asyncExecutor;
-        this.routeContextConsumer = routeContextConsumer;
-        this.route = state(context -> Tuple(context, Right(context.getState())));
+        this(asyncExecutor, routeContextConsumer, state(context -> Tuple(context, Right(context.getState()))));
     }
 
     public DefaultRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer,
@@ -109,6 +123,46 @@ public class DefaultRouteBuilder<T, P> implements RouterBuilder<T, P> {
         MatchRouteBuilder<T, P> matchRouteBuilder = new MatchRouteBuilder<>(this);
 
         return matchRoute.apply(matchRouteBuilder).addMatchRoute();
+    }
+
+    public DefaultRouteBuilder<T, P> split(Function<T, java.util.List<T>> splitter, Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator, Function<DefaultRouteBuilder<T, P>, DefaultRouteBuilder<T, P>> splitRoute) {
+        DefaultRouteBuilder<T, P> splitRouteBuilder = splitRoute.apply(new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer));
+
+        val _route = route.flatMap(either -> state(context -> either.map(x -> Tuple(x, List.ofAll(splitter.apply(x))))
+                .filter(not(tuple -> tuple._2.isEmpty()))
+                .fold(() -> Tuple(context, either), el -> el.fold($_ -> Tuple(context, either), tuple -> {
+                    val results = tuple._2.map(InternalRouteContext<T, P>::new).map(splitRouteBuilder.route::run);
+                    val nestedRouterContexts = results.map(CompletableFuture::completedFuture).collect(toList());
+                    val updatedNestedRouterContexts = context.nestedRouterContexts.appendAll(nestedRouterContexts);
+                    val updatedContext = new InternalRouteContext<>(context.getState(), context.getHistoryRecords(), updatedNestedRouterContexts);
+
+                    return Tuple(updatedContext, aggregator.apply(tuple._1, results.unzip(identity())._2.asJava()));
+                }))));
+
+        return new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer, _route);
+    }
+
+    public DefaultRouteBuilder<T, P> async(Function<DefaultRouteBuilder<T, P>, DefaultRouteBuilder<T, P>> asyncRoute) {
+        return async(asyncExecutor, asyncRoute);
+    }
+
+    public DefaultRouteBuilder<T, P> async(Executor asyncExecutor, Function<DefaultRouteBuilder<T, P>, DefaultRouteBuilder<T, P>> asyncRoute) {
+        DefaultRouteBuilder<T, P> asyncRouteBuilder = asyncRoute.apply(new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer));
+
+        val _route = route.flatMap(either -> state(context -> {
+            CompletableFuture<Tuple2<InternalRouteContext<T, P>, Either<P, T>>> promise = new CompletableFuture<>();
+
+            either.peekLeft(problem -> promise.cancel(true));
+            either.peek(branchedOffState -> runAsync(() -> Try(() -> asyncRouteBuilder.route.run(new InternalRouteContext<>(branchedOffState)))
+                    .onSuccess(promise::complete)
+                    .onFailure(promise::completeExceptionally), asyncExecutor));
+
+            InternalRouteContext<T, P> updatedContext = new InternalRouteContext<>(context.getState(), context.getHistoryRecords(), context.nestedRouterContexts.append(promise));
+
+            return Tuple(updatedContext, either);
+        }));
+
+        return new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer, _route);
     }
 
     private static <T, P> RouteFunction<T, P> simple(Function1<Either<P, T>, Either<P, T>> function, String name) {
