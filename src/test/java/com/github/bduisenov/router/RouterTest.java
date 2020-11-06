@@ -1,7 +1,5 @@
 package com.github.bduisenov.router;
 
-import com.github.bduisenov.router.Router.RouteContext;
-import com.github.bduisenov.router.Router.RouteHistoryRecord;
 import io.vavr.Function1;
 import io.vavr.Function2;
 import io.vavr.control.Either;
@@ -16,7 +14,7 @@ import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static com.github.bduisenov.router.Router.RetryableOperation.retryable;
+import static com.github.bduisenov.router.RetryableOperation.retryable;
 import static com.github.bduisenov.router.Router.router;
 import static io.vavr.API.$;
 import static io.vavr.API.Left;
