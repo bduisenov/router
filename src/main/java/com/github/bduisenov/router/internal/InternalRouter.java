@@ -59,7 +59,7 @@ class InternalRouter<T, P> implements Function<T, Either<P, T>> {
             }
 
             @Override
-            public java.util.List<Tuple2<RouteContext<T, P>, Either<P, T>>> getNestedRouterContexts() {
+            public java.util.List<Tuple2<RouteContext<T, P>, Either<P, T>>> getNestedRouteContexts() {
                 return internalRouteContext.getNestedRouterContexts().map(promise -> Try(() -> promise.get(0, NANOSECONDS)))
                         .flatMap(identity())
                         .map(tuple -> tuple.map1(InternalRouter.this::toJavaView))

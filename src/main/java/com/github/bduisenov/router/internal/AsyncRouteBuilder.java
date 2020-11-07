@@ -14,20 +14,21 @@ import static io.vavr.API.Tuple;
 import static java.util.concurrent.CompletableFuture.runAsync;
 
 @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
-public final class AsyncRouteBuilder<T, P> implements RouterBuilder<T, P> {
+public final class AsyncRouteBuilder<T, P> extends NestedRouteBuilder<T, P> {
 
     private final DefaultRouteBuilder<T, P> parentRouteBuilder;
 
     private final DefaultRouteBuilder<T, P> asyncRouteBuilder;
 
-    DefaultRouteBuilder<T, P> addAsyncRoute() {
-        val _route = parentRouteBuilder.route.flatMap(either -> state(context -> {
+    @Override
+    protected DefaultRouteBuilder<T, P> addNestedRoute() {
+        val _route = parentRouteBuilder.getRoute().flatMap(either -> state(context -> {
             CompletableFuture<Tuple2<InternalRouteContext<T, P>, Either<P, T>>> promise = new CompletableFuture<>();
 
             either.peekLeft(problem -> promise.cancel(true));
-            either.peek(branchedOffState -> runAsync(() -> Try(() -> asyncRouteBuilder.route.run(new InternalRouteContext<>(branchedOffState)))
+            either.peek(branchedOffState -> runAsync(() -> Try(() -> asyncRouteBuilder.getRoute().run(new InternalRouteContext<>(branchedOffState)))
                     .onSuccess(promise::complete)
-                    .onFailure(promise::completeExceptionally), asyncRouteBuilder.asyncExecutor));
+                    .onFailure(promise::completeExceptionally), asyncRouteBuilder.getAsyncExecutor()));
 
             InternalRouteContext<T, P> updatedContext = new InternalRouteContext<>(context.getState(), context.getHistoryRecords(), context.nestedRouterContexts.append(promise));
 

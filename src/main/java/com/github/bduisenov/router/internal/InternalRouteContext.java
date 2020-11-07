@@ -14,7 +14,7 @@ import static io.vavr.API.List;
 
 @Getter
 @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
-public final class InternalRouteContext<T, P> {
+final class InternalRouteContext<T, P> {
 
     // Last successful state
     private final T state;

@@ -9,6 +9,8 @@ import io.vavr.Function1;
 import io.vavr.Function2;
 import io.vavr.collection.List;
 import io.vavr.control.Either;
+import lombok.AccessLevel;
+import lombok.Getter;
 import lombok.val;
 
 import java.util.concurrent.Executor;
@@ -25,33 +27,34 @@ import static io.vavr.API.List;
 import static io.vavr.API.Right;
 import static io.vavr.API.Tuple;
 
-public class DefaultRouteBuilder<T, P> implements RouterBuilder<T, P> {
+@Getter(value = AccessLevel.PROTECTED)
+public class DefaultRouteBuilder<T, P> extends RouteBuilder<T, P> {
 
     /**
      * Initial route prepares {@link State} with {@link InternalRouteContext} and passed {@code state}.
      */
-    final State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route;
+    private final State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route;
 
     /**
      * Default async executor is used by async routes in case if no explicit executor is given to the async route.
      * By default, {@code directExecutor} is used which runs the execution on callers thread.
      */
-    final Executor asyncExecutor;
+    private final Executor asyncExecutor;
 
     /**
      * To be called when root route and all it's branches are complete.
      */
-    final Consumer<RouteContext<T, P>> routeContextConsumer;
+    private final Consumer<RouteContext<T, P>> routeContextConsumer;
 
     private final State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, T> getState = gets(InternalRouteContext::getState);
 
-    public DefaultRouteBuilder(DefaultRouteBuilder<T, P> parentRouteBuilder) {
-        this(parentRouteBuilder.asyncExecutor, parentRouteBuilder.routeContextConsumer);
+    public DefaultRouteBuilder(RouteBuilder<T, P> parentRouteBuilder) {
+        this(parentRouteBuilder.getAsyncExecutor(), parentRouteBuilder.getRouteContextConsumer());
     }
 
-    public DefaultRouteBuilder(DefaultRouteBuilder<T, P> parentRouteBuilder,
+    public DefaultRouteBuilder(RouteBuilder<T, P> parentRouteBuilder,
                                State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route) {
-        this(parentRouteBuilder.asyncExecutor, parentRouteBuilder.routeContextConsumer, route);
+        this(parentRouteBuilder.getAsyncExecutor(), parentRouteBuilder.getRouteContextConsumer(), route);
     }
 
     public DefaultRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
@@ -115,13 +118,13 @@ public class DefaultRouteBuilder<T, P> implements RouterBuilder<T, P> {
     public DefaultRouteBuilder<T, P> match(Function<MatchRouteBuilder<T, P>, MatchRouteBuilder<T, P>> matchRoute) {
         MatchRouteBuilder<T, P> matchRouteBuilder = new MatchRouteBuilder<>(this);
 
-        return matchRoute.apply(matchRouteBuilder).addMatchRoute();
+        return matchRoute.apply(matchRouteBuilder).addNestedRoute();
     }
 
     public DefaultRouteBuilder<T, P> split(Function<T, java.util.List<T>> splitter, Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator, Function<DefaultRouteBuilder<T, P>, DefaultRouteBuilder<T, P>> splitRoute) {
         DefaultRouteBuilder<T, P> splitRouteBuilder = splitRoute.apply(new DefaultRouteBuilder<>(this));
 
-        return new SplitRouteBuilder<>(this, splitRouteBuilder, splitter, aggregator).addSplitRoute();
+        return new SplitRouteBuilder<>(this, splitRouteBuilder, splitter, aggregator).addNestedRoute();
     }
 
     public DefaultRouteBuilder<T, P> async(Function<DefaultRouteBuilder<T, P>, DefaultRouteBuilder<T, P>> asyncRoute) {
@@ -131,7 +134,7 @@ public class DefaultRouteBuilder<T, P> implements RouterBuilder<T, P> {
     public DefaultRouteBuilder<T, P> async(Executor asyncExecutor, Function<DefaultRouteBuilder<T, P>, DefaultRouteBuilder<T, P>> asyncRoute) {
         DefaultRouteBuilder<T, P> asyncRouteBuilder = asyncRoute.apply(new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer));
 
-        return new AsyncRouteBuilder<>(this, asyncRouteBuilder).addAsyncRoute();
+        return new AsyncRouteBuilder<>(this, asyncRouteBuilder).addNestedRoute();
     }
 
     private static <T, P> RouteFunction<T, P> simple(Function1<Either<P, T>, Either<P, T>> function, String name) {

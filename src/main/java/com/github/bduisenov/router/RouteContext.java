@@ -9,5 +9,5 @@ public interface RouteContext<T, P> {
 
     java.util.List<RouteHistoryRecord<T, P>> getHistoryRecords();
 
-    java.util.List<Tuple2<RouteContext<T, P>, Either<P, T>>> getNestedRouterContexts();
+    java.util.List<Tuple2<RouteContext<T, P>, Either<P, T>>> getNestedRouteContexts();
 }
