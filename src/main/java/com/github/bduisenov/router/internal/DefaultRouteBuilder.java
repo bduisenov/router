@@ -27,8 +27,8 @@ import static io.vavr.API.List;
 import static io.vavr.API.Right;
 import static io.vavr.API.Tuple;
 
-@Getter(value = AccessLevel.PROTECTED)
-public class DefaultRouteBuilder<T, P> extends RouteBuilder<T, P> {
+@Getter(value = AccessLevel.PACKAGE)
+public final class DefaultRouteBuilder<T, P> extends RouteBuilder<T, P> {
 
     /**
      * Initial route prepares {@link State} with {@link InternalRouteContext} and passed {@code state}.
@@ -48,20 +48,20 @@ public class DefaultRouteBuilder<T, P> extends RouteBuilder<T, P> {
 
     private final State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, T> getState = gets(InternalRouteContext::getState);
 
-    public DefaultRouteBuilder(RouteBuilder<T, P> parentRouteBuilder) {
+    DefaultRouteBuilder(RouteBuilder<T, P> parentRouteBuilder) {
         this(parentRouteBuilder.getAsyncExecutor(), parentRouteBuilder.getRouteContextConsumer());
     }
 
-    public DefaultRouteBuilder(RouteBuilder<T, P> parentRouteBuilder,
+    DefaultRouteBuilder(RouteBuilder<T, P> parentRouteBuilder,
                                State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route) {
         this(parentRouteBuilder.getAsyncExecutor(), parentRouteBuilder.getRouteContextConsumer(), route);
     }
 
-    public DefaultRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
+    DefaultRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
         this(asyncExecutor, routeContextConsumer, state(context -> Tuple(context, Right(context.getState()))));
     }
 
-    public DefaultRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer,
+    DefaultRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer,
                                State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route) {
         this.asyncExecutor = asyncExecutor;
         this.routeContextConsumer = routeContextConsumer;
@@ -137,7 +137,7 @@ public class DefaultRouteBuilder<T, P> extends RouteBuilder<T, P> {
         return new AsyncRouteBuilder<>(this, asyncRouteBuilder).addNestedRoute();
     }
 
-    private static <T, P> RouteFunction<T, P> simple(Function1<Either<P, T>, Either<P, T>> function, String name) {
+    private RouteFunction<T, P> simple(Function1<Either<P, T>, Either<P, T>> function, String name) {
         return new RouteFunction<T, P>() {
             @Override
             public ExecutionContext<T, P> internalApply(T state, Either<P, T> either) {
@@ -149,7 +149,7 @@ public class DefaultRouteBuilder<T, P> extends RouteBuilder<T, P> {
         };
     }
 
-    private static <T, P> RouteFunction<T, P> alwaysReportable(Function1<Either<P, T>, Either<P, T>> function, String name) {
+    private RouteFunction<T, P> alwaysReportable(Function1<Either<P, T>, Either<P, T>> function, String name) {
         return new RouteFunction<T, P>() {
             @Override
             public ExecutionContext<T, P> apply(T state, Either<P, T> either) {
@@ -161,7 +161,7 @@ public class DefaultRouteBuilder<T, P> extends RouteBuilder<T, P> {
         };
     }
 
-    private static <T, P> RouteFunction<T, P> retryable(Function1<Either<P, T>, Either<P, T>> function, String name, int numberOfTries, Predicate<P> shouldApply) {
+    private RouteFunction<T, P> retryable(Function1<Either<P, T>, Either<P, T>> function, String name, int numberOfTries, Predicate<P> shouldApply) {
         return new RouteFunction<T, P>() {
             @Override
             public ExecutionContext<T, P> internalApply(T state, Either<P, T> either) {
@@ -181,7 +181,7 @@ public class DefaultRouteBuilder<T, P> extends RouteBuilder<T, P> {
         };
     }
 
-    public Function<T, Either<P, T>> build() {
+    Function<T, Either<P, T>> build() {
         return new InternalRouter<>(initialState -> route.run(new InternalRouteContext<>(initialState)), routeContextConsumer);
     }
 }

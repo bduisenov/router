@@ -12,7 +12,7 @@ import java.util.concurrent.CompletableFuture;
 
 import static io.vavr.API.List;
 
-@Getter
+@Getter(value = AccessLevel.PACKAGE)
 @RequiredArgsConstructor(access = AccessLevel.PACKAGE)
 final class InternalRouteContext<T, P> {
 
@@ -24,7 +24,7 @@ final class InternalRouteContext<T, P> {
     /**
      * Centralized map containing the async child route number and it's result context of execution.
      */
-    final List<CompletableFuture<Tuple2<InternalRouteContext<T, P>, Either<P, T>>>> nestedRouterContexts;
+    private final List<CompletableFuture<Tuple2<InternalRouteContext<T, P>, Either<P, T>>>> nestedRouterContexts;
 
     InternalRouteContext(T state, List<RouteHistoryRecord<T, P>> historyRecords) {
         this(state, historyRecords, List());

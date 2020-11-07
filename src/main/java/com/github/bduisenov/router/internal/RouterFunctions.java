@@ -35,7 +35,7 @@ public final class RouterFunctions {
 
             List<RouteHistoryRecord<T, P>> updatedHistoryRecords = context.getHistoryRecords().appendAll(historyRecords);
             InternalRouteContext<T, P> updatedContext = new InternalRouteContext<>(result.getOrElse(context.getState()), updatedHistoryRecords,
-                    context.nestedRouterContexts);
+                    context.getNestedRouterContexts());
 
             return Tuple(updatedContext, result);
         }));

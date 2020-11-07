@@ -1,6 +1,7 @@
 package com.github.bduisenov.router.internal;
 
 import com.github.bduisenov.fn.State;
+import com.github.bduisenov.router.internal.RouteBuilder.NestedRouteBuilder;
 import io.vavr.API;
 import io.vavr.API.Match.Case;
 import io.vavr.API.Match.Pattern0;
@@ -26,7 +27,7 @@ public final class MatchRouteBuilder<T, P> extends NestedRouteBuilder<T, P> {
         this(parentRouter, List());
     }
 
-    public MatchRouteBuilder(DefaultRouteBuilder<T, P> parentRouter, List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>> cases) {
+    MatchRouteBuilder(DefaultRouteBuilder<T, P> parentRouter, List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>> cases) {
         this.parentRouter = parentRouter;
         this.cases = cases;
     }
@@ -48,7 +49,7 @@ public final class MatchRouteBuilder<T, P> extends NestedRouteBuilder<T, P> {
     }
 
     @Override
-    protected DefaultRouteBuilder<T, P> addNestedRoute() {
+    DefaultRouteBuilder<T, P> addNestedRoute() {
         // default noop matcher
         val _cases = cases.append(Case($(), State::pure));
         @SuppressWarnings("unchecked")
