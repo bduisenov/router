@@ -55,11 +55,11 @@ final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
 
     private final State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, T> getState = gets(InternalRouteContext::getState);
 
-    public DefaultRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
+    DefaultRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
         this(asyncExecutor, routeContextConsumer, state(context -> Tuple(context, Right(context.getState()))));
     }
 
-    public DefaultRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route) {
+    DefaultRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route) {
         this.route = route;
         this.asyncExecutor = asyncExecutor;
         this.routeContextConsumer = routeContextConsumer;
@@ -214,12 +214,13 @@ final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
         };
     }
 
-    public Function<T, Either<P, T>> build() {
+    @Override
+    Function<T, Either<P, T>> build() {
         return new InternalRouter<>(initialState -> route.run(new InternalRouteContext<>(initialState)), routeContextConsumer);
     }
 
     @Override
-    public State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route() {
+    State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route() {
         return route;
     }
 }

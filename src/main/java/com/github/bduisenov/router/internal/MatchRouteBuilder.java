@@ -28,7 +28,7 @@ final class MatchRouteBuilder<T, P> implements MatchWhenStep<T, P> {
 
     final List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>> cases;
 
-    public MatchRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
+    MatchRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
         this(asyncExecutor, routeContextConsumer, List());
     }
 
