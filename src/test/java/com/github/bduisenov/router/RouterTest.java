@@ -3,15 +3,18 @@ package com.github.bduisenov.router;
 import io.vavr.Function1;
 import io.vavr.Function2;
 import io.vavr.control.Either;
+import io.vavr.control.Try;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
+import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -31,6 +34,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -52,6 +56,8 @@ class RouterTest {
 
     @BeforeEach
     void setUp() {
+        Mockito.reset();
+
         doAnswer(answer -> Right(answer.getArgument(0))).when(fun1).apply(any());
         doAnswer(answer -> Right(answer.getArgument(0))).when(fun2).apply(any());
         doAnswer(answer -> Right(answer.getArgument(0))).when(fun3).apply(any());
@@ -72,9 +78,10 @@ class RouterTest {
             Either<Problem, Doc> result = fun.apply(new Doc());
 
             assertThat(result.isRight()).isTrue();
-            verify(fun1).apply(any());
-            verify(fun2).apply(any());
-            verify(fun3).apply(any());
+            InOrder inOrder = inOrder(fun1, fun2, fun3);
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun3).apply(any());
         }
 
         @Test
@@ -90,9 +97,10 @@ class RouterTest {
             Either<Problem, Doc> result = fun.apply(new Doc());
 
             assertThat(result.isLeft()).isTrue();
-            verify(fun1).apply(any());
-            verify(fun2).apply(any());
-            verifyNoInteractions(fun3);
+            InOrder inOrder = inOrder(fun1, fun2, fun3);
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun3, never()).apply(any());
         }
     }
 
@@ -252,7 +260,8 @@ class RouterTest {
                                     .flatMap(fun2))
                             .when($Right($()), secondRoute -> secondRoute
                                     .flatMap(fun3)))
-                    .flatMap(fun4));
+                    .flatMap(fun4)
+            );
 
             Either<Problem, Doc> result = fun.apply(new Doc());
 
@@ -435,6 +444,106 @@ class RouterTest {
             Function<Doc, Either<Problem, Doc>> fun = router(route -> route
                     .split(splitter, aggregator, splitRoute -> splitRoute
                             .flatMap(fun1)));
+
+            Either<Problem, Doc> result = fun.apply(new Doc());
+
+            assertThat(result.isRight()).isTrue();
+            verify(fun1, times(3)).apply(any());
+        }
+
+        @Test
+        void whenSplitterReturnsNonEmptyList_runsNestedRouteForEachElementAndAggregate() {
+            Function<Doc, List<Doc>> splitter = doc -> asList(doc, doc, doc);
+            Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
+
+            Function<Doc, Either<Problem, Doc>> fun = router(route -> route
+                    .split(splitter, splitRoute -> splitRoute
+                            .flatMap(fun1)
+                            .flatMap(fun2))
+                    .aggregate(aggregator)
+                    .flatMap(fun3)
+                    .flatMap(fun4));
+
+            Either<Problem, Doc> result = fun.apply(new Doc());
+
+            assertThat(result.isRight()).isTrue();
+            InOrder inOrder = inOrder(fun1, fun2, fun3, fun4);
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun3).apply(any());
+            inOrder.verify(fun4).apply(any());
+        }
+
+        @Test
+        void whenSplitterReturnsEmptyList_skipsNestedRouteAndAggregate() {
+            Function<Doc, List<Doc>> splitter = doc -> emptyList();
+            Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
+
+            Function<Doc, Either<Problem, Doc>> fun = router(route -> route
+                    .split(splitter, splitRoute -> splitRoute
+                            .flatMap(fun1)
+                            .flatMap(fun2))
+                    .aggregate(aggregator)
+                    .flatMap(fun3)
+                    .flatMap(fun4));
+
+            Either<Problem, Doc> result = fun.apply(new Doc());
+
+            assertThat(result.isRight()).isTrue();
+            verifyNoInteractions(fun1);
+            verifyNoInteractions(fun2);
+            InOrder inOrder = inOrder(fun3, fun4);
+            inOrder.verify(fun3).apply(any());
+            inOrder.verify(fun4).apply(any());
+        }
+
+        @Test
+        void whenLeftSideIsGivenToSplitRoute_skipsNestedRouteAndAggregate() {
+            doReturn(Left(new Problem())).when(fun1).apply(any());
+
+            Function<Doc, List<Doc>> splitter = doc -> asList(doc, doc, doc);
+            Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
+
+            Function<Doc, Either<Problem, Doc>> fun = router(route -> route
+                    .flatMap(fun1)
+                    .split(splitter, splitRoute -> splitRoute
+                            .flatMap(fun2))
+                    .aggregate(aggregator)
+                    .flatMap(fun3));
+
+            Either<Problem, Doc> result = fun.apply(new Doc());
+
+            assertThat(result.isLeft()).isTrue();
+            verify(fun1).apply(any());
+            verifyNoInteractions(fun2);
+            verifyNoInteractions(fun3);
+        }
+
+        @Test
+        void initialStateAndSplitRouteResultListIsGivenToAggregator() {
+            Function<Doc, List<Doc>> splitter = doc -> asList(doc, doc, doc);
+            Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> {
+                assertThat(x).isNotNull();
+                assertThat(xs).allMatch(Either::isLeft);
+                return Right(x);
+            };
+
+            doReturn(Left(new Problem())).when(fun1).apply(any());
+
+            Function<Doc, Either<Problem, Doc>> fun = router(Executors.newCachedThreadPool(), route -> route
+                    .split(splitter, splitRoute -> splitRoute
+                            .async(asyncRoute -> asyncRoute
+                                    .flatMap(x -> {
+                                        Try.run(() -> Thread.sleep(100000
+                                        ));
+                                        return Right(x);
+                                    }))
+                            .flatMap(fun1))
+                    .aggregate(aggregator));
 
             Either<Problem, Doc> result = fun.apply(new Doc());
 

@@ -1,62 +1,55 @@
 package com.github.bduisenov.router.internal;
 
 import com.github.bduisenov.fn.State;
-import com.github.bduisenov.router.internal.RouteBuilder.NestedRouteBuilder;
-import io.vavr.API;
+import com.github.bduisenov.router.RouteContext;
+import com.github.bduisenov.router.internal.BuilderSteps.MatchWhenStep;
+import com.github.bduisenov.router.internal.BuilderSteps.Steps;
 import io.vavr.API.Match.Case;
 import io.vavr.API.Match.Pattern0;
 import io.vavr.API.Match.Pattern1;
 import io.vavr.collection.List;
 import io.vavr.control.Either;
+import lombok.RequiredArgsConstructor;
 import lombok.val;
 
+import java.util.concurrent.Executor;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static io.vavr.API.$;
 import static io.vavr.API.Case;
 import static io.vavr.API.List;
-import static io.vavr.API.Match;
 
-public final class MatchRouteBuilder<T, P> extends NestedRouteBuilder<T, P> {
+@RequiredArgsConstructor
+final class MatchRouteBuilder<T, P> implements MatchWhenStep<T, P> {
 
-    private final DefaultRouteBuilder<T, P> parentRouter;
+    private final Executor asyncExecutor;
 
-    private final List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>> cases;
+    private final Consumer<RouteContext<T, P>> routeContextConsumer;
 
-    MatchRouteBuilder(DefaultRouteBuilder<T, P> parentRouter) {
-        this(parentRouter, List());
-    }
+    final List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>> cases;
 
-    MatchRouteBuilder(DefaultRouteBuilder<T, P> parentRouter, List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>> cases) {
-        this.parentRouter = parentRouter;
-        this.cases = cases;
-    }
-
-    public MatchRouteBuilder<T, P> when(Pattern0<? extends Either<P, T>> pattern, Function<DefaultRouteBuilder<T, P>, DefaultRouteBuilder<T, P>> routerConsumer) {
-        DefaultRouteBuilder<T, P> matchRouteBuilder = routerConsumer.apply(new DefaultRouteBuilder<>(parentRouter));
-
-        val _cases = cases.append(Case(pattern, matchRouteBuilder.getRoute()));
-
-        return new MatchRouteBuilder<>(parentRouter, _cases);
-    }
-
-    public MatchRouteBuilder<T, P> when(Pattern1<? extends Either<P, T>, ?> pattern, Function<DefaultRouteBuilder<T, P>, DefaultRouteBuilder<T, P>> routerConsumer) {
-        DefaultRouteBuilder<T, P> matchRouteBuilder = routerConsumer.apply(new DefaultRouteBuilder<>(parentRouter));
-
-        val _cases = cases.append(Case(pattern, matchRouteBuilder.getRoute()));
-
-        return new MatchRouteBuilder<>(parentRouter, _cases);
+    public MatchRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
+        this(asyncExecutor, routeContextConsumer, List());
     }
 
     @Override
-    DefaultRouteBuilder<T, P> addNestedRoute() {
-        // default noop matcher
-        val _cases = cases.append(Case($(), State::pure));
-        @SuppressWarnings("unchecked")
-        API.Match.Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>[] casesArr = _cases.toJavaList().toArray(new API.Match.Case[0]);
+    public MatchWhenStep<T, P> when(Pattern1<? extends Either<P, T>, ?> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
+        val newBuilder = new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer);
+        val childRoute = routeConsumer.apply(newBuilder).route();
 
-        val _route = parentRouter.getRoute().flatMap(either -> Match(either).of(casesArr));
+        val _cases = cases.append(Case(pattern, childRoute));
 
-        return new DefaultRouteBuilder<>(parentRouter, _route);
+        return new MatchRouteBuilder<>(asyncExecutor, routeContextConsumer, _cases);
+    }
+
+    @Override
+    public MatchWhenStep<T, P> when(Pattern0<? extends Either<P, T>> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
+        val newBuilder = new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer);
+        val childRoute = routeConsumer.apply(newBuilder).route();
+
+        val _cases = cases.append(Case(pattern, childRoute));
+
+        return new MatchRouteBuilder<>(asyncExecutor, routeContextConsumer, _cases);
     }
 }
+
