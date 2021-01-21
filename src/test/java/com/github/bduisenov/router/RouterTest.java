@@ -1,7 +1,5 @@
 package com.github.bduisenov.router;
 
-import com.github.bduisenov.router.Router.RouteContext;
-import com.github.bduisenov.router.Router.RouteHistoryRecord;
 import io.vavr.Function1;
 import io.vavr.Function2;
 import io.vavr.control.Either;
@@ -9,6 +7,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.InOrder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,7 +15,7 @@ import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static com.github.bduisenov.router.Router.RetryableOperation.retryable;
+import static com.github.bduisenov.router.RetryableOperation.retryable;
 import static com.github.bduisenov.router.Router.router;
 import static io.vavr.API.$;
 import static io.vavr.API.Left;
@@ -30,6 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -48,12 +48,14 @@ class RouterTest {
     Function<Doc, Either<Problem, Doc>> fun1 = mock(Function.class);
     Function<Doc, Either<Problem, Doc>> fun2 = mock(Function.class);
     Function<Doc, Either<Problem, Doc>> fun3 = mock(Function.class);
+    Function<Doc, Either<Problem, Doc>> fun4 = mock(Function.class);
 
     @BeforeEach
     void setUp() {
         doAnswer(answer -> Right(answer.getArgument(0))).when(fun1).apply(any());
         doAnswer(answer -> Right(answer.getArgument(0))).when(fun2).apply(any());
         doAnswer(answer -> Right(answer.getArgument(0))).when(fun3).apply(any());
+        doAnswer(answer -> Right(answer.getArgument(0))).when(fun4).apply(any());
     }
 
     @Nested
@@ -149,15 +151,16 @@ class RouterTest {
             Function<Doc, Either<Problem, Doc>> fun = router(route -> route
                     .flatMap(fun1)
                     .flatMap(fun2)
-                    .flatMap(fun3)
-                    .recover(recover));
+                    .recover(recover)
+                    .flatMap(fun3));
 
             Either<Problem, Doc> result = fun.apply(new Doc());
 
             assertThat(result.isRight()).isTrue();
-            verify(fun1).apply(any());
-            verify(fun2).apply(any());
-            verify(fun3).apply(any());
+            InOrder inOrder = inOrder(fun1, fun2, fun3);
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun3).apply(any());
             verifyNoInteractions(recover);
         }
 
@@ -174,9 +177,10 @@ class RouterTest {
             Either<Problem, Doc> result = fun.apply(new Doc());
 
             assertThat(result.isRight()).isTrue();
-            verify(fun1).apply(any());
-            verify(fun2).apply(any());
-            verify(fun3).apply(any());
+            InOrder inOrder = inOrder(fun1, fun2, fun3);
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun3).apply(any());
             verify(recover).apply(any(), any());
         }
     }
@@ -247,13 +251,16 @@ class RouterTest {
                             .when($(), firstRoute -> firstRoute
                                     .flatMap(fun2))
                             .when($Right($()), secondRoute -> secondRoute
-                                    .flatMap(fun3))));
+                                    .flatMap(fun3)))
+                    .flatMap(fun4));
 
             Either<Problem, Doc> result = fun.apply(new Doc());
 
             assertThat(result.isRight()).isTrue();
-            verify(fun1).apply(any());
-            verify(fun2).apply(any());
+            InOrder inOrder = inOrder(fun1, fun2, fun3, fun4);
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun4).apply(any());
             verifyNoInteractions(fun3);
         }
 
@@ -267,12 +274,15 @@ class RouterTest {
                                     .flatMap(fun2))
                             .when($Left($()), secondRoute -> secondRoute
                                     .recover((doc, result) -> Right(doc))
-                                    .flatMap(fun3))));
+                                    .flatMap(fun3)))
+                    .flatMap(fun4));
 
             Either<Problem, Doc> result = fun.apply(new Doc());
 
             assertThat(result.isRight()).isTrue();
-            verify(fun1).apply(any());
+            InOrder inOrder = inOrder(fun1, fun4);
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun4).apply(any());
             verifyNoInteractions(fun2);
             verifyNoInteractions(fun3);
         }
@@ -294,16 +304,19 @@ class RouterTest {
             Function<Doc, Either<Problem, Doc>> fun = router(executor, route -> route
                     .async(asyncRoute -> asyncRoute
                             .flatMap(fun1)
-                            .flatMap(fun2)
-                            .flatMap(fun3)));
+                            .flatMap(fun2))
+                    .flatMap(fun3)
+                    .flatMap(fun4));
 
             Either<Problem, Doc> result = fun.apply(new Doc());
 
             assertThat(result.isRight()).isTrue();
             verify(executor).execute(any());
-            verify(fun1).apply(any());
-            verify(fun2).apply(any());
-            verify(fun3).apply(any());
+            InOrder inOrder = inOrder(fun1, fun2, fun3, fun4);
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun3).apply(any());
+            inOrder.verify(fun4).apply(any());
         }
 
         @Test
@@ -318,17 +331,20 @@ class RouterTest {
             Function<Doc, Either<Problem, Doc>> fun = router(executor, route -> route
                     .async(asyncExecutor, asyncRoute -> asyncRoute
                             .flatMap(fun1)
-                            .flatMap(fun2)
-                            .flatMap(fun3)));
+                            .flatMap(fun2))
+                    .flatMap(fun3)
+                    .flatMap(fun4));
 
             Either<Problem, Doc> result = fun.apply(new Doc());
 
             assertThat(result.isRight()).isTrue();
             verifyNoInteractions(executor);
             verify(asyncExecutor).execute(any());
-            verify(fun1).apply(any());
-            verify(fun2).apply(any());
-            verify(fun3).apply(any());
+            InOrder inOrder = inOrder(fun1, fun2, fun3, fun4);
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun3).apply(any());
+            inOrder.verify(fun4).apply(any());
         }
     }
 
@@ -344,15 +360,22 @@ class RouterTest {
             Function<Doc, Either<Problem, Doc>> fun = router(route -> route
                     .split(splitter, aggregator, splitRoute -> splitRoute
                             .flatMap(fun1)
-                            .flatMap(fun2)
-                            .flatMap(fun3)));
+                            .flatMap(fun2))
+                    .flatMap(fun3)
+                    .flatMap(fun4));
 
             Either<Problem, Doc> result = fun.apply(new Doc());
 
             assertThat(result.isRight()).isTrue();
-            verify(fun1, times(3)).apply(any());
-            verify(fun2, times(3)).apply(any());
-            verify(fun3, times(3)).apply(any());
+            InOrder inOrder = inOrder(fun1, fun2, fun3, fun4);
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun3).apply(any());
+            inOrder.verify(fun4).apply(any());
         }
 
         @Test
@@ -363,15 +386,18 @@ class RouterTest {
             Function<Doc, Either<Problem, Doc>> fun = router(route -> route
                     .split(splitter, aggregator, splitRoute -> splitRoute
                             .flatMap(fun1)
-                            .flatMap(fun2)
-                            .flatMap(fun3)));
+                            .flatMap(fun2))
+                    .flatMap(fun3)
+                    .flatMap(fun4));
 
             Either<Problem, Doc> result = fun.apply(new Doc());
 
             assertThat(result.isRight()).isTrue();
             verifyNoInteractions(fun1);
             verifyNoInteractions(fun2);
-            verifyNoInteractions(fun3);
+            InOrder inOrder = inOrder(fun3, fun4);
+            inOrder.verify(fun3).apply(any());
+            inOrder.verify(fun4).apply(any());
         }
 
         @Test
@@ -384,13 +410,15 @@ class RouterTest {
             Function<Doc, Either<Problem, Doc>> fun = router(route -> route
                     .flatMap(fun1)
                     .split(splitter, aggregator, splitRoute -> splitRoute
-                            .flatMap(fun2)));
+                            .flatMap(fun2))
+                    .flatMap(fun3));
 
             Either<Problem, Doc> result = fun.apply(new Doc());
 
             assertThat(result.isLeft()).isTrue();
             verify(fun1).apply(any());
             verifyNoInteractions(fun2);
+            verifyNoInteractions(fun3);
         }
 
         @Test
