@@ -22,34 +22,34 @@ import static io.vavr.API.List;
 @RequiredArgsConstructor
 final class MatchRouteBuilder<T, P> implements MatchWhenStep<T, P> {
 
-    private final Executor asyncExecutor;
+    private final Executor parentAsyncExecutor;
 
     private final Consumer<RouteContext<T, P>> routeContextConsumer;
 
     final List<Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>> cases;
 
-    MatchRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
-        this(asyncExecutor, routeContextConsumer, List());
+    MatchRouteBuilder(Executor parentAsyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
+        this(parentAsyncExecutor, routeContextConsumer, List());
     }
 
     @Override
     public MatchWhenStep<T, P> when(Pattern1<? extends Either<P, T>, ?> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
-        val newBuilder = new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer);
+        val newBuilder = new DefaultRouteBuilder<>(parentAsyncExecutor, routeContextConsumer);
         val childRoute = routeConsumer.apply(newBuilder).route();
 
         val _cases = cases.append(Case(pattern, childRoute));
 
-        return new MatchRouteBuilder<>(asyncExecutor, routeContextConsumer, _cases);
+        return new MatchRouteBuilder<>(parentAsyncExecutor, routeContextConsumer, _cases);
     }
 
     @Override
     public MatchWhenStep<T, P> when(Pattern0<? extends Either<P, T>> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
-        val newBuilder = new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer);
+        val newBuilder = new DefaultRouteBuilder<>(parentAsyncExecutor, routeContextConsumer);
         val childRoute = routeConsumer.apply(newBuilder).route();
 
         val _cases = cases.append(Case(pattern, childRoute));
 
-        return new MatchRouteBuilder<>(asyncExecutor, routeContextConsumer, _cases);
+        return new MatchRouteBuilder<>(parentAsyncExecutor, routeContextConsumer, _cases);
     }
 }
 

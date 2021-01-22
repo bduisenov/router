@@ -4,11 +4,12 @@ import com.github.bduisenov.fn.State;
 import com.github.bduisenov.router.RetryableOperation;
 import com.github.bduisenov.router.RouteContext;
 import com.github.bduisenov.router.RouteHistoryRecord;
-import com.github.bduisenov.router.internal.BuilderSteps.AggregateStep;
 import com.github.bduisenov.router.internal.BuilderSteps.MatchWhenStep;
+import com.github.bduisenov.router.internal.BuilderSteps.ParallelStep;
 import com.github.bduisenov.router.internal.BuilderSteps.Steps;
 import com.github.bduisenov.router.internal.BuilderSteps.TerminatingStep;
 import io.vavr.API;
+import io.vavr.API.Match.Case;
 import io.vavr.Function1;
 import io.vavr.Function2;
 import io.vavr.Tuple2;
@@ -98,7 +99,7 @@ final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
     }
 
     @Override
-    public AggregateStep<T, P> split(Function<T, java.util.List<T>> splitter, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
+    public ParallelStep<T, P> split(Function<T, java.util.List<T>> splitter, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
         val newBuilder = new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer);
         val childRoute = routeConsumer.apply(newBuilder).route();
 
@@ -106,12 +107,12 @@ final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
     }
 
     @Override
-    public Steps<T, P> async(Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
-        return async(asyncExecutor, routeConsumer);
+    public Steps<T, P> peekAsync(Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
+        return peekAsync(asyncExecutor, routeConsumer);
     }
 
     @Override
-    public Steps<T, P> async(Executor childAsyncExecutor, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
+    public Steps<T, P> peekAsync(Executor childAsyncExecutor, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
         val newBuilder = new DefaultRouteBuilder<>(childAsyncExecutor, routeContextConsumer);
         val childRoute = routeConsumer.apply(newBuilder).route();
 
@@ -138,7 +139,7 @@ final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
         // default noop matcher
         val _cases = matchRouteBuilder.cases.append(Case($(), State::pure));
         @SuppressWarnings("unchecked")
-        API.Match.Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>[] casesArr = _cases.toJavaList().toArray(new API.Match.Case[0]);
+        Case<? extends Either<P, T>, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>>>[] casesArr = _cases.toJavaList().toArray(new Case[0]);
 
         val _route = route.flatMap(either -> Match(either).of(casesArr));
 
