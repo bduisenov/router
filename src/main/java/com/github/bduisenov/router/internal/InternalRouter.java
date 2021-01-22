@@ -43,7 +43,7 @@ class InternalRouter<T, P> implements Function<T, Either<P, T>> {
     private CompletableFuture<Void> deepWait(List<CompletableFuture<Tuple2<InternalRouteContext<T, P>, Either<P, T>>>> promises) {
         List<CompletableFuture<Void>> deeplyChained = promises.map(promise -> promise.thenCompose(tuple -> deepWait(tuple._1.getNestedRouterContexts())));
 
-        return allOf(deeplyChained.toJavaList().toArray(new CompletableFuture[0]));
+        return allOf(deeplyChained.toJavaArray(CompletableFuture[]::new));
     }
 
     private RouteContext<T, P> toJavaView(InternalRouteContext<T, P> internalRouteContext) {

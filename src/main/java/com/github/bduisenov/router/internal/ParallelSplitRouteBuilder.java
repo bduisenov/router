@@ -3,7 +3,6 @@ package com.github.bduisenov.router.internal;
 import com.github.bduisenov.fn.State;
 import com.github.bduisenov.router.RouteContext;
 import com.github.bduisenov.router.internal.BuilderSteps.AggregateStep;
-import com.github.bduisenov.router.internal.BuilderSteps.ParallelStep;
 import com.github.bduisenov.router.internal.BuilderSteps.Steps;
 import io.vavr.Function2;
 import io.vavr.collection.List;
@@ -19,12 +18,15 @@ import java.util.function.Function;
 import static com.github.bduisenov.fn.State.state;
 import static io.vavr.API.Tuple;
 import static io.vavr.Predicates.not;
+import static java.util.concurrent.CompletableFuture.supplyAsync;
 import static java.util.function.Function.identity;
 
 @RequiredArgsConstructor
-final class SplitRouteBuilder<T, P> implements ParallelStep<T, P> {
+public class ParallelSplitRouteBuilder<T, P> implements AggregateStep<T, P> {
 
     private final Executor parentAsyncExecutor;
+
+    private final Executor childAsyncExecutor;
 
     private final Consumer<RouteContext<T, P>> routeContextConsumer;
 
@@ -39,25 +41,18 @@ final class SplitRouteBuilder<T, P> implements ParallelStep<T, P> {
         val _route = parentRoute.flatMap(either -> state(context -> either.map(x -> Tuple(x, List.ofAll(splitter.apply(x))))
                 .filter(not(tuple -> tuple._2.isEmpty()))
                 .fold(() -> Tuple(context, either), el -> el.fold(__ -> Tuple(context, either), tuple -> {
-                    val results = tuple._2.map(InternalRouteContext<T, P>::new).map(childRoute::run);
+                    val promises = tuple._2.map(branchedOffState -> supplyAsync(() ->
+                            childRoute.run(new InternalRouteContext<>(branchedOffState)), childAsyncExecutor));
 
-                    val nestedRouterContexts = results.map(CompletableFuture::completedFuture);
-                    val updatedNestedRouterContexts = context.getNestedRouterContexts().appendAll(nestedRouterContexts);
+                    val results = promises.map(CompletableFuture::join);
+
+                    val updatedNestedRouterContexts = context.getNestedRouterContexts().appendAll(promises);
                     val updatedContext = new InternalRouteContext<>(context.getState(), context.getHistoryRecords(), updatedNestedRouterContexts);
 
                     return Tuple(updatedContext, aggregator.apply(tuple._1, results.unzip(identity())._2.asJava()));
                 }))));
 
+
         return new DefaultRouteBuilder<>(parentAsyncExecutor, routeContextConsumer, _route);
-    }
-
-    @Override
-    public AggregateStep<T, P> parallel() {
-        return new ParallelSplitRouteBuilder<>(parentAsyncExecutor, parentAsyncExecutor, routeContextConsumer, parentRoute, childRoute, splitter);
-    }
-
-    @Override
-    public AggregateStep<T, P> parallel(Executor asyncExecutor) {
-        return new ParallelSplitRouteBuilder<>(parentAsyncExecutor, asyncExecutor, routeContextConsumer, parentRoute, childRoute, splitter);
     }
 }
