@@ -5,7 +5,6 @@ import com.github.bduisenov.router.RouteHistoryRecord;
 import io.vavr.Tuple2;
 import io.vavr.collection.List;
 import io.vavr.control.Either;
-import lombok.AccessLevel;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 
@@ -17,8 +16,9 @@ import static io.vavr.API.Try;
 import static java.util.concurrent.CompletableFuture.allOf;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 import static java.util.function.Function.identity;
+import static lombok.AccessLevel.PACKAGE;
 
-@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
+@RequiredArgsConstructor(access = PACKAGE)
 class InternalRouter<T, P> implements Function<T, Either<P, T>> {
 
     @NonNull

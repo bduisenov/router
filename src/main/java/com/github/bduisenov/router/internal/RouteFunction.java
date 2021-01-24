@@ -12,10 +12,11 @@ import java.time.Duration;
 import static io.vavr.API.List;
 import static io.vavr.API.TODO;
 import static io.vavr.API.Tuple;
+import static lombok.AccessLevel.PACKAGE;
 
 interface RouteFunction<T, P> {
 
-    @RequiredArgsConstructor
+    @RequiredArgsConstructor(access = PACKAGE)
     final class ExecutionContext<T, P> {
 
         final List<RouteHistoryRecord<T, P>> historyRecords;

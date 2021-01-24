@@ -4,16 +4,16 @@ import com.github.bduisenov.router.RouteHistoryRecord;
 import io.vavr.Tuple2;
 import io.vavr.collection.List;
 import io.vavr.control.Either;
-import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 import java.util.concurrent.CompletableFuture;
 
 import static io.vavr.API.List;
+import static lombok.AccessLevel.PACKAGE;
 
-@Getter(value = AccessLevel.PACKAGE)
-@RequiredArgsConstructor(access = AccessLevel.PACKAGE)
+@Getter(value = PACKAGE)
+@RequiredArgsConstructor(access = PACKAGE)
 final class InternalRouteContext<T, P> {
 
     // Last successful state

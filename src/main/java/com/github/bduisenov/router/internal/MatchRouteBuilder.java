@@ -18,8 +18,9 @@ import java.util.function.Function;
 
 import static io.vavr.API.Case;
 import static io.vavr.API.List;
+import static lombok.AccessLevel.PACKAGE;
 
-@RequiredArgsConstructor
+@RequiredArgsConstructor(access = PACKAGE)
 final class MatchRouteBuilder<T, P> implements MatchWhenStep<T, P> {
 
     private final Executor parentAsyncExecutor;

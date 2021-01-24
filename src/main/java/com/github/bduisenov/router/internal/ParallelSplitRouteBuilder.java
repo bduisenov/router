@@ -20,9 +20,10 @@ import static io.vavr.API.Tuple;
 import static io.vavr.Predicates.not;
 import static java.util.concurrent.CompletableFuture.supplyAsync;
 import static java.util.function.Function.identity;
+import static lombok.AccessLevel.PACKAGE;
 
-@RequiredArgsConstructor
-public class ParallelSplitRouteBuilder<T, P> implements AggregateStep<T, P> {
+@RequiredArgsConstructor(access = PACKAGE)
+final class ParallelSplitRouteBuilder<T, P> implements AggregateStep<T, P> {
 
     private final Executor parentAsyncExecutor;
 

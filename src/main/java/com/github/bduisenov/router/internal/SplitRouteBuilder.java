@@ -20,8 +20,9 @@ import static com.github.bduisenov.fn.State.state;
 import static io.vavr.API.Tuple;
 import static io.vavr.Predicates.not;
 import static java.util.function.Function.identity;
+import static lombok.AccessLevel.PACKAGE;
 
-@RequiredArgsConstructor
+@RequiredArgsConstructor(access = PACKAGE)
 final class SplitRouteBuilder<T, P> implements ParallelStep<T, P> {
 
     private final Executor parentAsyncExecutor;

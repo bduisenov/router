@@ -16,7 +16,6 @@ import io.vavr.Tuple2;
 import io.vavr.control.Either;
 import lombok.val;
 
-import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
@@ -30,6 +29,7 @@ import static com.github.bduisenov.fn.State.state;
 import static com.github.bduisenov.router.internal.RouterFunctions.thunk;
 import static io.vavr.API.$;
 import static io.vavr.API.Case;
+import static io.vavr.API.List;
 import static io.vavr.API.Match;
 import static io.vavr.API.Right;
 import static io.vavr.API.Try;
@@ -94,7 +94,7 @@ final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
     }
 
     @Override
-    public Steps<T, P> split(Function<T, java.util.List<T>> splitter, Function2<T, List<Either<P, T>>, Either<P, T>> aggregator, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
+    public Steps<T, P> split(Function<T, java.util.List<T>> splitter, Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
         return split(splitter, routeConsumer).aggregate(aggregator);
     }
 
@@ -178,7 +178,7 @@ final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
                 val executionResult = execute(function, either);
                 val rhr = createRouteHistoryRecord(either.get(), executionResult, name);
 
-                return new ExecutionContext<>(API.List(rhr), executionResult._1);
+                return new ExecutionContext<>(List(rhr), executionResult._1);
             }
         };
     }
@@ -190,7 +190,7 @@ final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
                 val executionResult = execute(function, either);
                 val rhr = createRouteHistoryRecord(either.getOrElse(state), executionResult, name);
 
-                return new ExecutionContext<>(API.List(rhr), executionResult._1);
+                return new ExecutionContext<>(List(rhr), executionResult._1);
             }
         };
     }
@@ -199,7 +199,7 @@ final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
         return new RouteFunction<T, P>() {
             @Override
             public ExecutionContext<T, P> internalApply(T state, Either<P, T> either) {
-                return internalApply(either, numberOfTries, API.List());
+                return internalApply(either, numberOfTries, List());
             }
 
             private ExecutionContext<T, P> internalApply(Either<P, T> either, int numberOfTries, io.vavr.collection.List<RouteHistoryRecord<T, P>> acc) {

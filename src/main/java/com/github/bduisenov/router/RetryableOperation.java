@@ -1,14 +1,15 @@
 package com.github.bduisenov.router;
 
-import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
 import java.util.function.Function;
 import java.util.function.Predicate;
 
+import static lombok.AccessLevel.PRIVATE;
+
 @Getter
-@RequiredArgsConstructor(access = AccessLevel.PRIVATE)
+@RequiredArgsConstructor(access = PRIVATE)
 public final class RetryableOperation<T, R, P> {
 
     private final Function<T, R> function;
