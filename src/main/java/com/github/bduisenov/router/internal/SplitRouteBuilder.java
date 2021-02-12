@@ -58,7 +58,7 @@ final class SplitRouteBuilder<T, P> implements ParallelStep<T, P> {
     }
 
     @Override
-    public AggregateStep<T, P> parallel(Executor asyncExecutor) {
-        return new ParallelSplitRouteBuilder<>(parentAsyncExecutor, asyncExecutor, routeContextConsumer, parentRoute, childRoute, splitter);
+    public AggregateStep<T, P> parallel(Executor childAsyncExecutor) {
+        return new ParallelSplitRouteBuilder<>(parentAsyncExecutor, childAsyncExecutor, routeContextConsumer, parentRoute, childRoute, splitter);
     }
 }

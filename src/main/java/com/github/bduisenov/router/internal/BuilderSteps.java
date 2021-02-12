@@ -13,6 +13,10 @@ import java.util.function.Function;
 
 public abstract class BuilderSteps {
 
+    private BuilderSteps() {
+        //NOOP
+    }
+
     public interface FlatMapStep<T, P> {
         Steps<T, P> flatMap(Function<T, Either<P, T>> fun);
 
@@ -33,7 +37,7 @@ public abstract class BuilderSteps {
     public interface ParallelStep<T, P> extends AggregateStep<T, P> {
         AggregateStep<T, P> parallel();
 
-        AggregateStep<T, P> parallel(Executor asyncExecutor);
+        AggregateStep<T, P> parallel(Executor childAsyncExecutor);
     }
 
     public interface PeekAsyncStep<T, P> {
@@ -52,12 +56,12 @@ public abstract class BuilderSteps {
         MatchWhenStep<T, P> when(Pattern1<? extends Either<P, T>, ?> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer);
     }
 
-    public interface FinalStep<T, P> {
-        TerminatingStep<T, P> doFinally(Function2<T, Either<P, T>, Either<P, T>> fun);
-    }
-
     public interface RecoverStep<T, P> {
         Steps<T, P> recover(Function2<T, P, Either<P, T>> recoverFun);
+    }
+
+    public interface FinalStep<T, P> {
+        TerminatingStep<T, P> doFinally(Function2<T, Either<P, T>, Either<P, T>> fun);
     }
 
     // MARK: step combinations
@@ -75,16 +79,12 @@ public abstract class BuilderSteps {
             FinalStep<T, P> {
     }
 
-    public static abstract class Steps<T, P> extends TerminatingStep<T, P> implements BasicSteps<T, P> {
+    public interface TerminatingStep<T, P> {
+        Function<T, Either<P, T>> build();
+
+        State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route();
     }
 
-    public static abstract class TerminatingStep<T, P> {
-        abstract Function<T, Either<P, T>> build();
-
-        abstract State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route();
-    }
-
-    private BuilderSteps() {
-        //NOOP
+    public interface Steps<T, P> extends TerminatingStep<T, P>, BasicSteps<T, P> {
     }
 }
