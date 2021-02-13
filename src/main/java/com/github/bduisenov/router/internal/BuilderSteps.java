@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
 
-public abstract class BuilderSteps {
+public final class BuilderSteps {
 
     private BuilderSteps() {
         //NOOP
