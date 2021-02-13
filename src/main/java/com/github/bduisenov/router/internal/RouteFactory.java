@@ -11,14 +11,15 @@ import java.util.function.Function;
 
 public abstract class RouteFactory<T, P> {
 
-    public static <T, P> Function<T, Either<P, T>> router(Executor asyncExecutor, Function<InitialSteps<T, P>, TerminatingStep<T, P>> routeConsumer,
+    public static <T, P> Function<T, Either<P, T>> router(Function<InitialSteps<T, P>, TerminatingStep<T, P>> routeConsumer,
                                                           Consumer<RouteContext<T, P>> routeContextConsumer) {
-        DefaultRouteBuilder<T, P> builder = builder(asyncExecutor, routeContextConsumer);
 
-        return routeConsumer.apply(builder).build();
+        return routeConsumer.apply(new DefaultRouteBuilder<>(routeContextConsumer)).build();
     }
 
-    private static <T, P> DefaultRouteBuilder<T, P> builder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
-        return new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer);
+    public static <T, P> Function<T, Either<P, T>> router(Executor asyncExecutor, Function<InitialSteps<T, P>, TerminatingStep<T, P>> routeConsumer,
+                                                          Consumer<RouteContext<T, P>> routeContextConsumer) {
+
+        return routeConsumer.apply(new ParallelRouteBuilder<>(asyncExecutor, routeContextConsumer)).build();
     }
 }

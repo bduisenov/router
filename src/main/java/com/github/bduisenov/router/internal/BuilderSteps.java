@@ -7,7 +7,6 @@ import io.vavr.API.Match.Pattern1;
 import io.vavr.Function2;
 import io.vavr.control.Either;
 
-import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
 
@@ -23,21 +22,16 @@ public final class BuilderSteps {
         Steps<T, P> flatMap(RetryableOperation<T, Either<P, T>, P> retryableOperation);
     }
 
-    public interface SplitStep<T, P> {
-        ParallelStep<T, P> split(Function<T, java.util.List<T>> splitter, Function<Steps<T, P>, Steps<T, P>> routeConsumer);
-
-        Steps<T, P> split(Function<T, java.util.List<T>> splitter, Function2<T, List<Either<P, T>>, Either<P, T>> aggregator,
-                          Function<Steps<T, P>, Steps<T, P>> routeConsumer);
-    }
-
     public interface AggregateStep<T, P> {
-        Steps<T, P> aggregate(Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator);
-    }
+        Steps<T, P> aggregate(Function<T, java.util.List<T>> splitter,
+                              Function<Steps<T, P>, Steps<T, P>> routeConsumer,
+                              Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator);
 
-    public interface ParallelStep<T, P> extends AggregateStep<T, P> {
-        AggregateStep<T, P> parallel();
-
-        AggregateStep<T, P> parallel(Executor childAsyncExecutor);
+        Steps<T, P> aggregate(Executor parentAsyncExecutor,
+                              Executor childAsyncExecutor,
+                              Function<T, java.util.List<T>> splitter,
+                              Function<Steps<T, P>, Steps<T, P>> routeConsumer,
+                              Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator);
     }
 
     public interface PeekAsyncStep<T, P> {
@@ -53,7 +47,11 @@ public final class BuilderSteps {
     public interface MatchWhenStep<T, P> {
         MatchWhenStep<T, P> when(Pattern0<? extends Either<P, T>> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer);
 
+        MatchWhenStep<T, P> when(Executor parentAsyncExecutor, Pattern0<? extends Either<P, T>> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer);
+
         MatchWhenStep<T, P> when(Pattern1<? extends Either<P, T>, ?> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer);
+
+        MatchWhenStep<T, P> when(Executor parentAsyncExecutor, Pattern1<? extends Either<P, T>, ?> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer);
     }
 
     public interface RecoverStep<T, P> {
@@ -68,7 +66,7 @@ public final class BuilderSteps {
 
     public interface InitialSteps<T, P> extends
             FlatMapStep<T, P>,
-            SplitStep<T, P>,
+            AggregateStep<T, P>,
             PeekAsyncStep<T, P>,
             MatchStep<T, P> {
     }

@@ -11,6 +11,7 @@ import io.vavr.API;
 import io.vavr.API.Match.Case;
 import io.vavr.Function1;
 import io.vavr.Function2;
+import io.vavr.Tuple2;
 import io.vavr.collection.List;
 import io.vavr.control.Either;
 import lombok.val;
@@ -25,14 +26,22 @@ import static com.github.bduisenov.fn.State.*;
 import static com.github.bduisenov.router.internal.RouterFunctions.thunk;
 import static io.vavr.API.*;
 import static io.vavr.Predicates.not;
+import static java.util.concurrent.CompletableFuture.runAsync;
+import static java.util.concurrent.CompletableFuture.supplyAsync;
 import static java.util.function.Function.identity;
 
-final class DefaultRouteBuilder<T, P> implements Steps<T, P> {
+final class ParallelRouteBuilder<T, P> implements Steps<T, P> {
 
     /**
      * Initial route prepares {@link State} with {@link InternalRouteContext} and passed {@code state}.
      */
     private final State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route;
+
+    /**
+     * Default async executor is used by async routes in case if no explicit executor is given to the async route.
+     * By default, {@code directExecutor} is used which runs the execution on callers thread.
+     */
+    private final Executor asyncExecutor;
 
     /**
      * To be called when root route and all it's branches are complete.
@@ -41,12 +50,13 @@ final class DefaultRouteBuilder<T, P> implements Steps<T, P> {
 
     private final State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, T> getState = gets(InternalRouteContext::getState);
 
-    DefaultRouteBuilder(Consumer<RouteContext<T, P>> routeContextConsumer) {
-        this(routeContextConsumer, state(context -> Tuple(context, Right(context.getState()))));
+    ParallelRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer) {
+        this(asyncExecutor, routeContextConsumer, state(context -> Tuple(context, Right(context.getState()))));
     }
 
-    DefaultRouteBuilder(Consumer<RouteContext<T, P>> routeContextConsumer, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route) {
+    ParallelRouteBuilder(Executor asyncExecutor, Consumer<RouteContext<T, P>> routeContextConsumer, State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route) {
         this.route = route;
+        this.asyncExecutor = asyncExecutor;
         this.routeContextConsumer = routeContextConsumer;
     }
 
@@ -56,7 +66,7 @@ final class DefaultRouteBuilder<T, P> implements Steps<T, P> {
 
         val _route = route.flatMap(thunk(pure(simple(either -> either.flatMap(fun), name))));
 
-        return new DefaultRouteBuilder<>(routeContextConsumer, _route);
+        return new ParallelRouteBuilder<>(asyncExecutor, routeContextConsumer, _route);
     }
 
     @Override
@@ -73,31 +83,14 @@ final class DefaultRouteBuilder<T, P> implements Steps<T, P> {
 
         val _route = route.flatMap(thunk(pure(retryable(either -> either.flatMap(fun), name, numberOfTries, predicate))));
 
-        return new DefaultRouteBuilder<>(routeContextConsumer, _route);
+        return new ParallelRouteBuilder<>(asyncExecutor, routeContextConsumer, _route);
     }
 
     @Override
     public Steps<T, P> aggregate(Function<T, java.util.List<T>> splitter,
                                  Function<Steps<T, P>, Steps<T, P>> routeConsumer,
                                  Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator) {
-
-        val newBuilder = new DefaultRouteBuilder<>(routeContextConsumer);
-        val childRoute = routeConsumer.apply(newBuilder).route();
-
-        val _route = route.flatMap(either -> state(context -> either.map(x -> Tuple(x, List.ofAll(splitter.apply(x))))
-                .filter(not(tuple -> tuple._2.isEmpty()))
-                .fold(() -> Tuple(context, either), el -> el.fold(__ -> Tuple(context, either), tuple -> {
-                    val results = tuple._2.map(InternalRouteContext<T, P>::new).map(childRoute::run);
-
-                    val nestedRouterContexts = results.map(CompletableFuture::completedFuture);
-                    val updatedNestedRouterContexts = context.getNestedRouterContexts().appendAll(nestedRouterContexts);
-                    val updatedContext = new InternalRouteContext<>(context.getState(), context.getHistoryRecords(), updatedNestedRouterContexts);
-
-                    return Tuple(updatedContext, aggregator.apply(tuple._1, results.unzip(identity())._2.asJava()));
-                }))));
-
-        // this is a circular dependency
-        return new DefaultRouteBuilder<>(routeContextConsumer, _route);
+        return aggregate(asyncExecutor, asyncExecutor, splitter, routeConsumer, aggregator);
     }
 
     @Override
@@ -106,17 +99,52 @@ final class DefaultRouteBuilder<T, P> implements Steps<T, P> {
                                  Function<T, java.util.List<T>> splitter,
                                  Function<Steps<T, P>, Steps<T, P>> routeConsumer,
                                  Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator) {
-        throw new UnsupportedOperationException("This method is not supported for single threaded route builder");
+
+        val newBuilder = new ParallelRouteBuilder<>(asyncExecutor, routeContextConsumer);
+        val childRoute = routeConsumer.apply(newBuilder).route();
+
+        val _route = route.flatMap(either -> state(context -> either.map(x -> Tuple(x, List.ofAll(splitter.apply(x))))
+                .filter(not(tuple -> tuple._2.isEmpty()))
+                .fold(() -> Tuple(context, either), el -> el.fold(__ -> Tuple(context, either), tuple -> {
+                    val promises = tuple._2.map(branchedOffState -> supplyAsync(() ->
+                            childRoute.run(new InternalRouteContext<>(branchedOffState)), childAsyncExecutor));
+
+                    val results = promises.map(CompletableFuture::join);
+
+                    val updatedNestedRouterContexts = context.getNestedRouterContexts().appendAll(promises);
+                    val updatedContext = new InternalRouteContext<>(context.getState(), context.getHistoryRecords(), updatedNestedRouterContexts);
+
+                    return Tuple(updatedContext, aggregator.apply(tuple._1, results.unzip(identity())._2.asJava()));
+                }))));
+
+
+        return new ParallelRouteBuilder<>(parentAsyncExecutor, routeContextConsumer, _route);
     }
 
     @Override
     public Steps<T, P> peekAsync(Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
-        throw new UnsupportedOperationException("This method is not supported for single threaded route builder");
+        return peekAsync(asyncExecutor, routeConsumer);
     }
 
     @Override
     public Steps<T, P> peekAsync(Executor childAsyncExecutor, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
-        throw new UnsupportedOperationException("This method is not supported for single threaded route builder");
+        val newBuilder = new ParallelRouteBuilder<>(childAsyncExecutor, routeContextConsumer);
+        val childRoute = routeConsumer.apply(newBuilder).route();
+
+        val _route = route.flatMap(either -> state(context -> {
+            val promise = new CompletableFuture<Tuple2<InternalRouteContext<T, P>, Either<P, T>>>();
+
+            either.peekLeft(problem -> promise.cancel(true));
+            either.peek(branchedOffState -> runAsync(() -> Try(() -> childRoute.run(new InternalRouteContext<>(branchedOffState)))
+                    .onSuccess(promise::complete)
+                    .onFailure(promise::completeExceptionally), childAsyncExecutor));
+
+            InternalRouteContext<T, P> updatedContext = new InternalRouteContext<>(context.getState(), context.getHistoryRecords(), context.getNestedRouterContexts().append(promise));
+
+            return Tuple(updatedContext, either);
+        }));
+
+        return new ParallelRouteBuilder<>(asyncExecutor, routeContextConsumer, _route);
     }
 
     @Override
@@ -130,7 +158,7 @@ final class DefaultRouteBuilder<T, P> implements Steps<T, P> {
 
         val _route = route.flatMap(either -> Match(either).of(casesArr));
 
-        return new DefaultRouteBuilder<>(routeContextConsumer, _route);
+        return new ParallelRouteBuilder<>(asyncExecutor, routeContextConsumer, _route);
     }
 
     @Override
@@ -142,7 +170,7 @@ final class DefaultRouteBuilder<T, P> implements Steps<T, P> {
 
         val _route = route.flatMap(thunk(lifted.apply(getState).map(f -> alwaysReportable(f, name))));
 
-        return new DefaultRouteBuilder<>(routeContextConsumer, _route);
+        return new ParallelRouteBuilder<>(asyncExecutor, routeContextConsumer, _route);
     }
 
     @Override
@@ -155,7 +183,7 @@ final class DefaultRouteBuilder<T, P> implements Steps<T, P> {
             return Tuple(context, recovered);
         }));
 
-        return new DefaultRouteBuilder<>(routeContextConsumer, _route);
+        return new ParallelRouteBuilder<>(asyncExecutor, routeContextConsumer, _route);
     }
 
     @Override

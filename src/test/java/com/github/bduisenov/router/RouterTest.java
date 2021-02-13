@@ -3,10 +3,7 @@ package com.github.bduisenov.router;
 import io.vavr.Function1;
 import io.vavr.Function2;
 import io.vavr.control.Either;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
 
@@ -310,9 +307,7 @@ class RouterTest {
         @Test
         void whenImplicitExecutorIsGiven_usesImplicitExecutor() {
             Function<Doc, Either<Problem, Doc>> fun = router(executor, route -> route
-                    .peekAsync(asyncRoute -> asyncRoute
-                            .flatMap(fun1)
-                            .flatMap(fun2))
+                    .peekAsync(asyncRoute -> asyncRoute.flatMap(fun1).flatMap(fun2))
                     .flatMap(fun3)
                     .flatMap(fun4));
 
@@ -337,9 +332,10 @@ class RouterTest {
             });
 
             Function<Doc, Either<Problem, Doc>> fun = router(executor, route -> route
-                    .peekAsync(asyncExecutor, asyncRoute -> asyncRoute
-                            .flatMap(fun1)
-                            .flatMap(fun2))
+                    .peekAsync(
+                            asyncExecutor,
+                            asyncRoute -> asyncRoute.flatMap(fun1).flatMap(fun2)
+                    )
                     .flatMap(fun3)
                     .flatMap(fun4));
 
@@ -373,9 +369,11 @@ class RouterTest {
             Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
 
             Function<Doc, Either<Problem, Doc>> fun = router(route -> route
-                    .split(splitter, aggregator, splitRoute -> splitRoute
-                            .flatMap(fun1)
-                            .flatMap(fun2))
+                    .aggregate(
+                            splitter,
+                            splitRoute -> splitRoute.flatMap(fun1).flatMap(fun2),
+                            aggregator
+                    )
                     .flatMap(fun3)
                     .flatMap(fun4));
 
@@ -399,9 +397,11 @@ class RouterTest {
             Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
 
             Function<Doc, Either<Problem, Doc>> fun = router(route -> route
-                    .split(splitter, aggregator, splitRoute -> splitRoute
-                            .flatMap(fun1)
-                            .flatMap(fun2))
+                    .aggregate(
+                            splitter,
+                            splitRoute -> splitRoute.flatMap(fun1).flatMap(fun2),
+                            aggregator
+                    )
                     .flatMap(fun3)
                     .flatMap(fun4));
 
@@ -424,8 +424,11 @@ class RouterTest {
 
             Function<Doc, Either<Problem, Doc>> fun = router(route -> route
                     .flatMap(fun1)
-                    .split(splitter, aggregator, splitRoute -> splitRoute
-                            .flatMap(fun2))
+                    .aggregate(
+                            splitter,
+                            splitRoute -> splitRoute.flatMap(fun2),
+                            aggregator
+                    )
                     .flatMap(fun3));
 
             Either<Problem, Doc> result = fun.apply(new Doc());
@@ -448,8 +451,12 @@ class RouterTest {
             doReturn(Left(new Problem())).when(fun1).apply(any());
 
             Function<Doc, Either<Problem, Doc>> fun = router(route -> route
-                    .split(splitter, aggregator, splitRoute -> splitRoute
-                            .flatMap(fun1)));
+                    .aggregate(
+                            splitter,
+                            splitRoute -> splitRoute.flatMap(fun1),
+                            aggregator
+                    )
+            );
 
             Either<Problem, Doc> result = fun.apply(new Doc());
 
@@ -463,10 +470,11 @@ class RouterTest {
             Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
 
             Function<Doc, Either<Problem, Doc>> fun = router(route -> route
-                    .split(splitter, splitRoute -> splitRoute
-                            .flatMap(fun1)
-                            .flatMap(fun2))
-                    .aggregate(aggregator)
+                    .aggregate(
+                            splitter,
+                            splitRoute -> splitRoute.flatMap(fun1).flatMap(fun2),
+                            aggregator
+                    )
                     .flatMap(fun3)
                     .flatMap(fun4));
 
@@ -490,10 +498,11 @@ class RouterTest {
             Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
 
             Function<Doc, Either<Problem, Doc>> fun = router(route -> route
-                    .split(splitter, splitRoute -> splitRoute
-                            .flatMap(fun1)
-                            .flatMap(fun2))
-                    .aggregate(aggregator)
+                    .aggregate(
+                            splitter,
+                            splitRoute -> splitRoute.flatMap(fun1).flatMap(fun2),
+                            aggregator
+                    )
                     .flatMap(fun3)
                     .flatMap(fun4));
 
@@ -516,9 +525,11 @@ class RouterTest {
 
             Function<Doc, Either<Problem, Doc>> fun = router(route -> route
                     .flatMap(fun1)
-                    .split(splitter, splitRoute -> splitRoute
-                            .flatMap(fun2))
-                    .aggregate(aggregator)
+                    .aggregate(
+                            splitter,
+                            splitRoute -> splitRoute.flatMap(fun2),
+                            aggregator
+                    )
                     .flatMap(fun3));
 
             Either<Problem, Doc> result = fun.apply(new Doc());
@@ -530,7 +541,7 @@ class RouterTest {
         }
 
         @Test
-        void initialStateAndSplitRouteResultListAreGivenToAggregator() {
+        void initialStateAndSplitRoute_listAreGivenToAggregator() {
             Function<Doc, List<Doc>> splitter = doc -> asList(doc, doc, doc);
             Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> {
                 assertThat(x).isNotNull();
@@ -541,9 +552,12 @@ class RouterTest {
             doReturn(Left(new Problem())).when(fun1).apply(any());
 
             Function<Doc, Either<Problem, Doc>> fun = router(route -> route
-                    .split(splitter, splitRoute -> splitRoute
-                            .flatMap(fun1))
-                    .aggregate(aggregator));
+                    .aggregate(
+                            splitter,
+                            splitRoute -> splitRoute.flatMap(fun1),
+                            aggregator
+                    )
+            );
 
             Either<Problem, Doc> result = fun.apply(new Doc());
 
@@ -557,11 +571,79 @@ class RouterTest {
             Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
 
             Function<Doc, Either<Problem, Doc>> fun = router(executor, route -> route
-                    .split(splitter, splitRoute -> splitRoute
-                            .flatMap(fun1)
-                            .flatMap(fun2))
-                    .parallel()
-                    .aggregate(aggregator)
+                    .aggregate(
+                            splitter,
+                            splitRoute -> splitRoute.flatMap(fun1).flatMap(fun2),
+                            aggregator
+                    )
+                    .flatMap(fun3)
+                    .flatMap(fun4));
+
+            Either<Problem, Doc> result = fun.apply(new Doc());
+
+            assertThat(result.isRight()).isTrue();
+            verify(executor, times(3)).execute(any()); // this method should be checked
+            InOrder inOrder = inOrder(fun1, fun2, fun3, fun4);
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun3).apply(any());
+            inOrder.verify(fun4).apply(any());
+        }
+
+        /**
+         * TODO: For now it is possible to specify executors for single threaded aggregate operations, but it will throw UnsupportedOperationException.
+         * AggregateStep interface should be splitted to two separate interfaces to avoid such situations
+         */
+        @Test
+        void whenSplitterReturnsNonEmptyListAndNoExecutorPassed_runsInParallelAndAggregate() {
+            Function<Doc, List<Doc>> splitter = doc -> asList(doc, doc, doc);
+            Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
+
+
+            Assertions.assertThrows(UnsupportedOperationException.class, () ->
+            {
+                Function<Doc, Either<Problem, Doc>> fun = router(route -> route
+                        .aggregate(
+                                executor,
+                                executor,
+                                splitter,
+                                splitRoute -> splitRoute.flatMap(fun1).flatMap(fun2),
+                                aggregator
+                        )
+                        .flatMap(fun3)
+                        .flatMap(fun4));
+
+                Either<Problem, Doc> result = fun.apply(new Doc());
+
+                assertThat(result.isRight()).isTrue();
+                verify(executor, times(3)).execute(any()); // this place should be checked
+                InOrder inOrder = inOrder(fun1, fun2, fun3, fun4);
+                inOrder.verify(fun1).apply(any());
+                inOrder.verify(fun2).apply(any());
+                inOrder.verify(fun1).apply(any());
+                inOrder.verify(fun2).apply(any());
+                inOrder.verify(fun1).apply(any());
+                inOrder.verify(fun2).apply(any());
+                inOrder.verify(fun3).apply(any());
+                inOrder.verify(fun4).apply(any());
+            });
+        }
+
+        @Test
+        void whenSplitterReturnsNonEmptyListAndMethodParallelNotInvoked_runsInParallelAndAggregate() {
+            Function<Doc, List<Doc>> splitter = doc -> asList(doc, doc, doc);
+            Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
+
+            Function<Doc, Either<Problem, Doc>> fun = router(executor, route -> route
+                    .aggregate(
+                            splitter,
+                            splitRoute -> splitRoute.flatMap(fun1).flatMap(fun2),
+                            aggregator
+                    )
                     .flatMap(fun3)
                     .flatMap(fun4));
 
@@ -580,80 +662,17 @@ class RouterTest {
             inOrder.verify(fun4).apply(any());
         }
 
-        /**
-         * Current implementation requires developer to specify both the executor and the parallel method invocation.
-         * It is confusing.
-         */
-        @Test
-        void whenSplitterReturnsNonEmptyListAndNoExecutorPassed_runsInParallelAndAggregate() {
-            Function<Doc, List<Doc>> splitter = doc -> asList(doc, doc, doc);
-            Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
-
-//            Function<Doc, Either<Problem, Doc>> fun = router(executor, route -> route
-            Function<Doc, Either<Problem, Doc>> fun = router(route -> route
-                    .split(splitter, splitRoute -> splitRoute
-                            .flatMap(fun1)
-                            .flatMap(fun2))
-                    .parallel()
-                    .aggregate(aggregator)
-                    .flatMap(fun3)
-                    .flatMap(fun4));
-
-            Either<Problem, Doc> result = fun.apply(new Doc());
-
-            assertThat(result.isRight()).isTrue();
-//            verify(executor, times(3)).execute(any());
-            InOrder inOrder = inOrder(fun1, fun2, fun3, fun4);
-            inOrder.verify(fun1).apply(any());
-            inOrder.verify(fun2).apply(any());
-            inOrder.verify(fun1).apply(any());
-            inOrder.verify(fun2).apply(any());
-            inOrder.verify(fun1).apply(any());
-            inOrder.verify(fun2).apply(any());
-            inOrder.verify(fun3).apply(any());
-            inOrder.verify(fun4).apply(any());
-        }
-
-        @Test
-        void whenSplitterReturnsNonEmptyListAndMethodParallelNotInvoked_runsInParallelAndAggregate() {
-            Function<Doc, List<Doc>> splitter = doc -> asList(doc, doc, doc);
-            Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
-
-            Function<Doc, Either<Problem, Doc>> fun = router(executor, route -> route
-                    .split(splitter, splitRoute -> splitRoute
-                            .flatMap(fun1)
-                            .flatMap(fun2))
-//                    .parallel()
-                    .aggregate(aggregator)
-                    .flatMap(fun3)
-                    .flatMap(fun4));
-
-            Either<Problem, Doc> result = fun.apply(new Doc());
-
-            assertThat(result.isRight()).isTrue();
-//            verify(executor, times(3)).execute(any());
-            InOrder inOrder = inOrder(fun1, fun2, fun3, fun4);
-            inOrder.verify(fun1).apply(any());
-            inOrder.verify(fun2).apply(any());
-            inOrder.verify(fun1).apply(any());
-            inOrder.verify(fun2).apply(any());
-            inOrder.verify(fun1).apply(any());
-            inOrder.verify(fun2).apply(any());
-            inOrder.verify(fun3).apply(any());
-            inOrder.verify(fun4).apply(any());
-        }
-
         @Test
         void whenSplitterReturnsEmptyList_skipsParallelAndAggregate() {
             Function<Doc, List<Doc>> splitter = doc -> emptyList();
             Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
 
             Function<Doc, Either<Problem, Doc>> fun = router(executor, route -> route
-                    .split(splitter, splitRoute -> splitRoute
-                            .flatMap(fun1)
-                            .flatMap(fun2))
-                    .parallel()
-                    .aggregate(aggregator)
+                    .aggregate(
+                            splitter,
+                            splitRoute -> splitRoute.flatMap(fun1).flatMap(fun2),
+                            aggregator
+                    )
                     .flatMap(fun3)
                     .flatMap(fun4));
 
@@ -677,10 +696,10 @@ class RouterTest {
 
             Function<Doc, Either<Problem, Doc>> fun = router(executor, route -> route
                     .flatMap(fun1)
-                    .split(splitter, splitRoute -> splitRoute
-                            .flatMap(fun2))
-                    .parallel()
-                    .aggregate(aggregator)
+                    .aggregate(
+                            splitter,
+                            splitRoute -> splitRoute.flatMap(fun2),
+                            aggregator)
                     .flatMap(fun3));
 
             Either<Problem, Doc> result = fun.apply(new Doc());
@@ -697,6 +716,7 @@ class RouterTest {
     @DisplayName("routeContext")
     class RouteContextConsumer {
 
+        // TODO peekAsync methods should be moved out of DefaultRouteBuilder to prevent such problems.
         @Test
         void whenRouteIsExecuted_containsHistoryRecordForEachFunction() {
             List<RouteHistoryRecord<Doc, Problem>> historyRecords = new ArrayList<>();
@@ -706,20 +726,26 @@ class RouterTest {
                 rc.getNestedRouteContexts().forEach(nrc -> historyRecords.addAll(nrc._1.getHistoryRecords()));
             };
 
-            Function<Doc, Either<Problem, Doc>> fun = router(route -> route
-                    .flatMap(fun1)
-                    .peekAsync(asyncRoute -> asyncRoute
-                            .flatMap(fun1))
-                    .split(Collections::singletonList, splitRoute -> splitRoute
-                        .flatMap(fun1))
-                    .parallel()
-                    .aggregate((doc, xs) -> xs.get(0))
-                    .flatMap(fun1), consumer);
+            Assertions.assertThrows(UnsupportedOperationException.class, () ->
+                    {
+                        Function<Doc, Either<Problem, Doc>> fun = router(route -> route
+                                        .flatMap(fun1)
+                                        .peekAsync(asyncRoute -> asyncRoute.flatMap(fun1))
+                                        .aggregate(
+                                                Collections::singletonList,
+                                                splitRoute -> splitRoute.flatMap(fun1),
+                                                (doc, xs) -> xs.get(0)
+                                        )
+                                        .flatMap(fun1),
+                                consumer
+                        );;
 
-            Either<Problem, Doc> result = fun.apply(new Doc());
+                        Either<Problem, Doc> result = fun.apply(new Doc());
 
-            assertThat(result.isRight()).isTrue();
-            assertThat(historyRecords).hasSize(4);
+                        assertThat(result.isRight()).isTrue();
+                        assertThat(historyRecords).hasSize(4);
+                    }
+            );
         }
     }
 }
