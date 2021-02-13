@@ -7,11 +7,14 @@ import io.vavr.API.Match.Pattern1;
 import io.vavr.Function2;
 import io.vavr.control.Either;
 
-import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.function.Function;
 
-public abstract class BuilderSteps {
+public final class BuilderSteps {
+
+    private BuilderSteps() {
+        //NOOP
+    }
 
     public interface FlatMapStep<T, P> {
         Steps<T, P> flatMap(Function<T, Either<P, T>> fun);
@@ -19,21 +22,16 @@ public abstract class BuilderSteps {
         Steps<T, P> flatMap(RetryableOperation<T, Either<P, T>, P> retryableOperation);
     }
 
-    public interface SplitStep<T, P> {
-        ParallelStep<T, P> split(Function<T, java.util.List<T>> splitter, Function<Steps<T, P>, Steps<T, P>> routeConsumer);
-
-        Steps<T, P> split(Function<T, java.util.List<T>> splitter, Function2<T, List<Either<P, T>>, Either<P, T>> aggregator,
-                          Function<Steps<T, P>, Steps<T, P>> routeConsumer);
-    }
-
     public interface AggregateStep<T, P> {
-        Steps<T, P> aggregate(Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator);
-    }
+        Steps<T, P> aggregate(Function<T, java.util.List<T>> splitter,
+                              Function<Steps<T, P>, Steps<T, P>> routeConsumer,
+                              Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator);
 
-    public interface ParallelStep<T, P> extends AggregateStep<T, P> {
-        AggregateStep<T, P> parallel();
-
-        AggregateStep<T, P> parallel(Executor asyncExecutor);
+        Steps<T, P> aggregate(Executor parentAsyncExecutor,
+                              Executor childAsyncExecutor,
+                              Function<T, java.util.List<T>> splitter,
+                              Function<Steps<T, P>, Steps<T, P>> routeConsumer,
+                              Function2<T, java.util.List<Either<P, T>>, Either<P, T>> aggregator);
     }
 
     public interface PeekAsyncStep<T, P> {
@@ -49,22 +47,26 @@ public abstract class BuilderSteps {
     public interface MatchWhenStep<T, P> {
         MatchWhenStep<T, P> when(Pattern0<? extends Either<P, T>> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer);
 
-        MatchWhenStep<T, P> when(Pattern1<? extends Either<P, T>, ?> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer);
-    }
+        MatchWhenStep<T, P> when(Executor parentAsyncExecutor, Pattern0<? extends Either<P, T>> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer);
 
-    public interface FinalStep<T, P> {
-        TerminatingStep<T, P> doFinally(Function2<T, Either<P, T>, Either<P, T>> fun);
+        MatchWhenStep<T, P> when(Pattern1<? extends Either<P, T>, ?> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer);
+
+        MatchWhenStep<T, P> when(Executor parentAsyncExecutor, Pattern1<? extends Either<P, T>, ?> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer);
     }
 
     public interface RecoverStep<T, P> {
         Steps<T, P> recover(Function2<T, P, Either<P, T>> recoverFun);
     }
 
+    public interface FinalStep<T, P> {
+        TerminatingStep<T, P> doFinally(Function2<T, Either<P, T>, Either<P, T>> fun);
+    }
+
     // MARK: step combinations
 
     public interface InitialSteps<T, P> extends
             FlatMapStep<T, P>,
-            SplitStep<T, P>,
+            AggregateStep<T, P>,
             PeekAsyncStep<T, P>,
             MatchStep<T, P> {
     }
@@ -75,16 +77,12 @@ public abstract class BuilderSteps {
             FinalStep<T, P> {
     }
 
-    public static abstract class Steps<T, P> extends TerminatingStep<T, P> implements BasicSteps<T, P> {
+    public interface TerminatingStep<T, P> {
+        Function<T, Either<P, T>> build();
+
+        State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route();
     }
 
-    public static abstract class TerminatingStep<T, P> {
-        abstract Function<T, Either<P, T>> build();
-
-        abstract State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route();
-    }
-
-    private BuilderSteps() {
-        //NOOP
+    public interface Steps<T, P> extends TerminatingStep<T, P>, BasicSteps<T, P> {
     }
 }
