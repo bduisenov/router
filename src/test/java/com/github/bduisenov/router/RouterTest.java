@@ -190,6 +190,32 @@ class RouterTest {
             inOrder.verify(fun3).apply(any());
             verify(recover).apply(any(), any());
         }
+
+        @Test
+        public void whenRecovered_recoveredStateIsUsedInSubRoute() {
+            Function<Integer, Either<Integer, Integer>> fun = mock(Function.class);
+            doAnswer(answer -> Right(answer.getArgument(0, Integer.class) + 1)).when(fun).apply(any());
+
+            Function<Integer, Either<Integer, Integer>> router = router(route -> route
+                    .flatMap(fun) // 1 -> 2
+                    .flatMap(fun) // 2 -> 3
+                    .flatMap(in -> Left(0))
+                    .recover((in, either) -> Right(4)) // 3 -> 4
+                    .match(mr -> mr
+                            .when($Right($(in -> in == 4)), wr -> wr
+                                    .flatMap(fun))) // 4 -> 5
+                    .flatMap(fun) // 5 -> 6
+            );
+
+            final Either<Integer, Integer> result = router.apply(1);
+
+            assertThat(result).isEqualTo(Right(6));
+            InOrder inOrder = inOrder(fun, fun, fun, fun);
+            inOrder.verify(fun).apply(1);
+            inOrder.verify(fun).apply(2);
+            inOrder.verify(fun).apply(4);
+            inOrder.verify(fun).apply(5);
+        }
     }
 
     @Nested
@@ -648,7 +674,7 @@ class RouterTest {
                     .peekAsync(asyncRoute -> asyncRoute
                             .flatMap(fun1))
                     .split(Collections::singletonList, splitRoute -> splitRoute
-                        .flatMap(fun1))
+                            .flatMap(fun1))
                     .parallel()
                     .aggregate((doc, xs) -> xs.get(0))
                     .flatMap(fun1), consumer);

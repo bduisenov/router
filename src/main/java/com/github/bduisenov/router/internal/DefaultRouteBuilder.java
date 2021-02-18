@@ -34,6 +34,7 @@ import static io.vavr.API.Match;
 import static io.vavr.API.Right;
 import static io.vavr.API.Try;
 import static io.vavr.API.Tuple;
+import static io.vavr.Function1.constant;
 import static java.util.concurrent.CompletableFuture.runAsync;
 
 final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
@@ -165,7 +166,9 @@ final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
 
             Either<P, T> recovered = either.fold(problem -> recoverFun.apply(state, problem), API::Right);
 
-            return Tuple(context, recovered);
+            InternalRouteContext<T, P> updatedContext = recovered.fold(constant(context), x -> new InternalRouteContext<>(x, context.getHistoryRecords(), context.getNestedRouterContexts()));
+
+            return Tuple(updatedContext, recovered);
         }));
 
         return new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer, _route);
