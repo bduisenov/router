@@ -17,10 +17,7 @@ import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-import static com.github.bduisenov.fn.State.state;
 import static io.vavr.API.List;
-import static io.vavr.API.Right;
-import static io.vavr.API.Tuple;
 import static lombok.AccessLevel.PACKAGE;
 
 @RequiredArgsConstructor(access = PACKAGE)
@@ -38,18 +35,17 @@ final class MatchRouteBuilder<T, P> implements MatchWhenStep<T, P> {
 
     @Override
     public MatchWhenStep<T, P> when(Pattern1<? extends Either<P, T>, ?> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
-        val _cases = cases.append(new WhenCase<>(pattern, either -> {
-            val newBuilder = new DefaultRouteBuilder<>(parentAsyncExecutor, routeContextConsumer, state(context -> Tuple(context, either)));
-            return routeConsumer.apply(newBuilder).route();
-        }));
-
-        return new MatchRouteBuilder<>(parentAsyncExecutor, routeContextConsumer, _cases);
+        return whenInternal(pattern, routeConsumer);
     }
 
     @Override
     public MatchWhenStep<T, P> when(Pattern0<? extends Either<P, T>> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
+        return whenInternal(pattern, routeConsumer);
+    }
+
+    private MatchWhenStep<T, P> whenInternal(Pattern<? extends Either<P, T>, ?> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
         val _cases = cases.append(new WhenCase<>(pattern, either -> {
-            val newBuilder = new DefaultRouteBuilder<>(parentAsyncExecutor, routeContextConsumer, state(context -> Tuple(context, Right(context.getState()))));
+            val newBuilder = new DefaultRouteBuilder<>(parentAsyncExecutor, routeContextConsumer, State.pure(either));
             return routeConsumer.apply(newBuilder).route();
         }));
 
