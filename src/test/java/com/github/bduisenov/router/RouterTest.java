@@ -22,6 +22,7 @@ import static com.github.bduisenov.router.Router.router;
 import static io.vavr.API.$;
 import static io.vavr.API.Left;
 import static io.vavr.API.Right;
+import static io.vavr.API.TODO;
 import static io.vavr.Patterns.$Left;
 import static io.vavr.Patterns.$Right;
 import static java.util.Arrays.asList;
@@ -216,33 +217,6 @@ class RouterTest {
             inOrder.verify(fun).apply(4);
             inOrder.verify(fun).apply(5);
         }
-
-        @Test
-        void whenRecoveredInsideMatch_statePassedToOuterRoute() {
-            Function<Integer, Either<Integer, Integer>> fun = mock(Function.class);
-            doAnswer(answer -> Right(answer.getArgument(0, Integer.class) + 1)).when(fun).apply(any());
-
-            Function<Integer, Either<Integer, Integer>> router = router(route -> route
-                    .flatMap(fun) // 1 -> 2
-                    .flatMap(fun) // 2 -> 3
-                    .flatMap(in -> Left(0))
-                    .match(mr -> mr
-                            .when($Left($()), lr -> lr
-                                    .recover((in, either) -> Right(4))
-                                    .flatMap(fun) // 4 -> 5
-                            ))
-                    .flatMap(fun) // 5 -> 6
-            );
-
-            final Either<Integer, Integer> result = router.apply(1);
-
-            InOrder inOrder = inOrder(fun, fun, fun, fun);
-            inOrder.verify(fun).apply(1);
-            inOrder.verify(fun).apply(2);
-            inOrder.verify(fun).apply(4);
-            inOrder.verify(fun).apply(5);
-            assertThat(result).isEqualTo(Right(6));
-        }
     }
 
     @Nested
@@ -346,6 +320,30 @@ class RouterTest {
             inOrder.verify(fun4).apply(any());
             verifyNoInteractions(fun2);
             verifyNoInteractions(fun3);
+        }
+
+        @Test
+        void whenLeftCaseMatched_skipNestedRoute() {
+            Function<Integer, Either<Integer, Integer>> fun = mock(Function.class);
+            doAnswer(answer -> Right(answer.getArgument(0, Integer.class) + 1)).when(fun).apply(any());
+
+            Function<Integer, Either<Integer, Integer>> router = router(route -> route
+                    .flatMap(fun) // 1 -> 2
+                    .flatMap(fun) // 2 -> 3
+                    .flatMap(in -> Left(0))
+                    .match(mr -> mr
+                            .when($Left($()), lr -> lr
+                                    .flatMap(x -> TODO("must not be called"))))
+                    .flatMap(fun)
+            );
+
+            final Either<Integer, Integer> result = router.apply(1);
+
+            InOrder inOrder = inOrder(fun);
+            inOrder.verify(fun).apply(1);
+            inOrder.verify(fun).apply(2);
+            verify(fun, times(2)).apply(any());
+            assertThat(result).isEqualTo(Left(0));
         }
     }
 
