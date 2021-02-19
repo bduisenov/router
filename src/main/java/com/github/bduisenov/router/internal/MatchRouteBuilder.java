@@ -59,9 +59,8 @@ final class MatchRouteBuilder<T, P> implements MatchWhenStep<T, P> {
     @RequiredArgsConstructor
     public static final class WhenCase<T, R> implements Case<T, R> {
 
-        private static final long serialVersionUID = 1L;
-
         private final Pattern<T, ?> pattern;
+
         private final Function<T, R> f;
 
         @Override
