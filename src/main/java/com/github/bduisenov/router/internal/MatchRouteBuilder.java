@@ -17,6 +17,7 @@ import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
+import static com.github.bduisenov.fn.State.pure;
 import static io.vavr.API.List;
 import static lombok.AccessLevel.PACKAGE;
 
@@ -45,7 +46,7 @@ final class MatchRouteBuilder<T, P> implements MatchWhenStep<T, P> {
 
     private MatchWhenStep<T, P> whenInternal(Pattern<? extends Either<P, T>, ?> pattern, Function<Steps<T, P>, Steps<T, P>> routeConsumer) {
         val _cases = cases.append(new WhenCase<>(pattern, either -> {
-            val newBuilder = new DefaultRouteBuilder<>(parentAsyncExecutor, routeContextConsumer, State.pure(either));
+            val newBuilder = new DefaultRouteBuilder<>(parentAsyncExecutor, routeContextConsumer, pure(either));
             return routeConsumer.apply(newBuilder).route();
         }));
 
