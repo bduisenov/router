@@ -37,7 +37,7 @@ import static io.vavr.API.Tuple;
 import static io.vavr.Function1.constant;
 import static java.util.concurrent.CompletableFuture.runAsync;
 
-final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
+final class DefaultRouteBuilder<T, P> implements Steps<T, P> {
 
     /**
      * Initial route prepares {@link State} with {@link InternalRouteContext} and passed {@code state}.
@@ -174,6 +174,16 @@ final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
         return new DefaultRouteBuilder<>(asyncExecutor, routeContextConsumer, _route);
     }
 
+    @Override
+    public Function<T, Either<P, T>> build() {
+        return new InternalRouter<>(initialState -> route.run(new InternalRouteContext<>(initialState)), routeContextConsumer);
+    }
+
+    @Override
+    public State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route() {
+        return route;
+    }
+
     private RouteFunction<T, P> simple(Function1<Either<P, T>, Either<P, T>> function, String name) {
         return new RouteFunction<T, P>() {
             @Override
@@ -216,16 +226,6 @@ final class DefaultRouteBuilder<T, P> extends Steps<T, P> {
                         : new ExecutionContext<>(acc.append(rhr), result);
             }
         };
-    }
-
-    @Override
-    Function<T, Either<P, T>> build() {
-        return new InternalRouter<>(initialState -> route.run(new InternalRouteContext<>(initialState)), routeContextConsumer);
-    }
-
-    @Override
-    State<InternalRouteContext<T, P>, InternalRouteContext<T, P>, Either<P, T>> route() {
-        return route;
     }
 }
 

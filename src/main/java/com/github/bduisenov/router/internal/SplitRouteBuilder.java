@@ -22,6 +22,16 @@ import static io.vavr.Predicates.not;
 import static java.util.function.Function.identity;
 import static lombok.AccessLevel.PACKAGE;
 
+/**
+ * Another funny thing:
+ * the class with the name SplitRouteBuilder implements ParallelStep interface ant two parallel methods
+ * but
+ * the class with the name ParallelSplitRouteBuilder implements AggregateStep interface.
+ * From my perspective "ParallelStep" interface should be removed completely.
+ * I think it is possible to determine which type of SplitRouteBuilder to produce based on a context.
+ * @param <T>
+ * @param <P>
+ */
 @RequiredArgsConstructor(access = PACKAGE)
 final class SplitRouteBuilder<T, P> implements ParallelStep<T, P> {
 
@@ -49,6 +59,7 @@ final class SplitRouteBuilder<T, P> implements ParallelStep<T, P> {
                     return Tuple(updatedContext, aggregator.apply(tuple._1, results.unzip(identity())._2.asJava()));
                 }))));
 
+        // this is a circular dependency
         return new DefaultRouteBuilder<>(parentAsyncExecutor, routeContextConsumer, _route);
     }
 
@@ -58,7 +69,7 @@ final class SplitRouteBuilder<T, P> implements ParallelStep<T, P> {
     }
 
     @Override
-    public AggregateStep<T, P> parallel(Executor asyncExecutor) {
-        return new ParallelSplitRouteBuilder<>(parentAsyncExecutor, asyncExecutor, routeContextConsumer, parentRoute, childRoute, splitter);
+    public AggregateStep<T, P> parallel(Executor childAsyncExecutor) {
+        return new ParallelSplitRouteBuilder<>(parentAsyncExecutor, childAsyncExecutor, routeContextConsumer, parentRoute, childRoute, splitter);
     }
 }

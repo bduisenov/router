@@ -659,6 +659,69 @@ class RouterTest {
             inOrder.verify(fun4).apply(any());
         }
 
+        /**
+         * Current implementation requires developer to specify both the executor and the parallel method invocation.
+         * It is confusing.
+         */
+        @Test
+        void whenSplitterReturnsNonEmptyListAndNoExecutorPassed_runsInParallelAndAggregate() {
+            Function<Doc, List<Doc>> splitter = doc -> asList(doc, doc, doc);
+            Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
+
+//            Function<Doc, Either<Problem, Doc>> fun = router(executor, route -> route
+            Function<Doc, Either<Problem, Doc>> fun = router(route -> route
+                    .split(splitter, splitRoute -> splitRoute
+                            .flatMap(fun1)
+                            .flatMap(fun2))
+                    .parallel()
+                    .aggregate(aggregator)
+                    .flatMap(fun3)
+                    .flatMap(fun4));
+
+            Either<Problem, Doc> result = fun.apply(new Doc());
+
+            assertThat(result.isRight()).isTrue();
+//            verify(executor, times(3)).execute(any());
+            InOrder inOrder = inOrder(fun1, fun2, fun3, fun4);
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun3).apply(any());
+            inOrder.verify(fun4).apply(any());
+        }
+
+        @Test
+        void whenSplitterReturnsNonEmptyListAndMethodParallelNotInvoked_runsInParallelAndAggregate() {
+            Function<Doc, List<Doc>> splitter = doc -> asList(doc, doc, doc);
+            Function2<Doc, List<Either<Problem, Doc>>, Either<Problem, Doc>> aggregator = (x, xs) -> Right(x);
+
+            Function<Doc, Either<Problem, Doc>> fun = router(executor, route -> route
+                    .split(splitter, splitRoute -> splitRoute
+                            .flatMap(fun1)
+                            .flatMap(fun2))
+//                    .parallel()
+                    .aggregate(aggregator)
+                    .flatMap(fun3)
+                    .flatMap(fun4));
+
+            Either<Problem, Doc> result = fun.apply(new Doc());
+
+            assertThat(result.isRight()).isTrue();
+//            verify(executor, times(3)).execute(any());
+            InOrder inOrder = inOrder(fun1, fun2, fun3, fun4);
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun1).apply(any());
+            inOrder.verify(fun2).apply(any());
+            inOrder.verify(fun3).apply(any());
+            inOrder.verify(fun4).apply(any());
+        }
+
         @Test
         void whenSplitterReturnsEmptyList_skipsParallelAndAggregate() {
             Function<Doc, List<Doc>> splitter = doc -> emptyList();
